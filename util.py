@@ -1,7 +1,9 @@
+import os
 import torch
 import numpy as np
 from torchvision import transforms
 from PIL import Image, ImageOps
+from torchvision.transforms.functional import to_pil_image, to_tensor
 import random
 
 
@@ -98,30 +100,19 @@ def get_box_from_parsing_tensor(image_size, face_mask, hair_mask, target_image_s
 
 
 '''Class to apply all transformations, including the RandomCropResizePad with a bounding box'''
-class ImageTransforms:
+class ImageMaskTransforms:
     def __init__(self, image_size, bounding_box, pad_value=(0, 0, 0)):
         self.image_size = image_size
         self.bounding_box = bounding_box
         self.pad_value = pad_value
-        self.pre_transforms = transforms.Compose([
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.ColorJitter(brightness=(0.8, 1.2), contrast=(0.8, 1.2), saturation=(0.8, 1.2), hue=0.01),
-        ])
-        self.post_transforms = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        ])
+        self.to_tensor = transforms.ToTensor()
+        self.color_jitter = transforms.ColorJitter(brightness=(0.8, 1.2), contrast=(0.8, 1.2), saturation=(0.8, 1.2), hue=0.01)
 
-    def random_crop_resize_pad(self, img):
-        new_rmin, new_rmax, new_cmin, new_cmax = self.bounding_box
-        margin_height = (new_rmax - new_rmin) * random.uniform(0, 0.1)
-        margin_width = (new_cmax - new_cmin) * random.uniform(0, 0.1)
-        top = new_rmin + margin_height
-        left = new_cmin + margin_width
-        bottom = new_rmax - margin_height
-        right = new_cmax - margin_width
+    def transform(self, img, do_flip, resize_scale, margins, apply_color_jitter=False):
+        top, left, bottom, right = margins
+        if do_flip:
+            img = ImageOps.mirror(img)
         img = img.crop((left, top, right, bottom))
-        resize_scale = random.uniform(0.5, 1.0)
         new_width = int((right - left) * resize_scale)
         new_height = int((bottom - top) * resize_scale)
         img = img.resize((new_width, new_height), Image.BILINEAR)
@@ -130,10 +121,62 @@ class ImageTransforms:
         padding_right = self.image_size[0] - new_width - padding_left
         padding_bottom = self.image_size[1] - new_height - padding_top
         img = ImageOps.expand(img, border=(padding_left, padding_top, padding_right, padding_bottom), fill=self.pad_value)
+        if apply_color_jitter:
+            img = self.color_jitter(img)
         return img
 
-    def __call__(self, img):
-        img = self.pre_transforms(img)
-        img = self.random_crop_resize_pad(img)
-        img = self.post_transforms(img)
-        return img
+    def get_transformation_params(self):
+        do_flip = random.random() > 0.5
+        resize_scale = random.uniform(0.7, 1.0)
+        new_rmin, new_rmax, new_cmin, new_cmax = self.bounding_box
+        margin_height = (new_rmax - new_rmin) * random.uniform(0, 0.1)
+        margin_width = (new_cmax - new_cmin) * random.uniform(0, 0.1)
+        top = new_rmin + margin_height
+        left = new_cmin + margin_width
+        bottom = new_rmax - margin_height
+        right = new_cmax - margin_width
+        margins = (top, left, bottom, right)
+        return do_flip, resize_scale, margins
+
+    def tensor_to_pil(self, tensor):
+        return to_pil_image(tensor)
+
+    def pil_to_tensor(self, pil_img):
+        return to_tensor(pil_img)
+
+    def __call__(self, img, mask1=None, mask2=None):
+        do_flip, resize_scale, margins = self.get_transformation_params()
+
+        # Convert the image tensor to PIL for processing
+        img_pil_transformed = self.transform(img, do_flip, resize_scale, margins, apply_color_jitter=True)
+        # Convert back to tensor after transformation
+        img_tensor_transformed = self.pil_to_tensor(img_pil_transformed)
+
+        combined_mask_tensor = torch.zeros_like(img_tensor_transformed[0], dtype=torch.bool)
+
+        if mask1 is not None:
+            mask1_pil = self.tensor_to_pil(mask1.float())  # Convert boolean mask tensor to float tensor before to PIL
+            mask1_pil = self.transform(mask1_pil, do_flip, resize_scale, margins)
+            mask1_tensor_transformed = self.pil_to_tensor(mask1_pil).bool()  # Convert back to boolean tensor
+            combined_mask_tensor |= mask1_tensor_transformed.squeeze()
+
+        if mask2 is not None:
+            mask2_pil = self.tensor_to_pil(mask2.float())  # Same conversion as for mask1
+            mask2_pil = self.transform(mask2_pil, do_flip, resize_scale, margins)
+            mask2_tensor_transformed = self.pil_to_tensor(mask2_pil).bool()
+            combined_mask_tensor |= mask2_tensor_transformed.squeeze()
+
+        # Apply the combined mask to the image tensor
+        img_tensor_transformed *= combined_mask_tensor.unsqueeze(0).repeat(3, 1, 1)  # Ensure mask applies to all channels
+
+        # Save the transformed image for logging purposes
+        save_path = "transformed_image.jpg"
+        transformed_image_pil = self.tensor_to_pil(img_tensor_transformed)
+        transformed_image_pil.save(save_path)
+
+        # Print log message with details
+        print(f"Transformation applied: {'Flip' if do_flip else 'No flip'}, Resize scale: {resize_scale}, Margins: {margins}")
+        print(f"Transformed image saved at: {os.path.abspath(save_path)}")
+
+        # Return transformed image and masks
+        return img_tensor_transformed, mask1_tensor_transformed if mask1 is not None else None, mask2_tensor_transformed if mask2 is not None else None
