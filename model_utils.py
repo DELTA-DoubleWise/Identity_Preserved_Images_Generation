@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import kornia
-from einops import rearrange
 import torch.nn.init as init
 
+
+def leaky_relu(p=0.2):
+    return nn.LeakyReLU(p, inplace=True)
 
 class EqualLinear(nn.Module):
     def __init__(self, in_dim, out_dim, lr_mul=1, bias=True, pre_norm=False, activate=False):
@@ -34,6 +35,15 @@ class EqualLinear(nn.Module):
         return out
 
 
+class Residual(nn.Module):
+    def __init__(self,
+                 fn):
+        super().__init__()
+        self.fn = fn
+
+    def forward(self, x, **kwargs):
+        return x + self.fn(x, **kwargs)
+
 class StyleVectorizer(nn.Module):
     def __init__(self, dim_in, dim_out, depth, lr_mul=0.1):
         super().__init__()
@@ -55,3 +65,12 @@ class StyleVectorizer(nn.Module):
 
     def forward(self, x):
         return self.norm(self.net(x))
+
+
+def get_rep_pos(tokenized: torch.Tensor, rep_tokens: list):
+    pos_list = []
+    # for token in rep_tokens:
+    #     pos_list.append(torch.where(tokenized == token).cpu().numpy())
+    for token in rep_tokens:
+        pos_list = torch.stack(torch.where(tokenized == token)).T.tolist()
+    return pos_list
