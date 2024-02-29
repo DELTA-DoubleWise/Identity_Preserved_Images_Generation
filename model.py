@@ -68,6 +68,18 @@ class IDPreservedGenerativeModel(StableDiffusionPipeline):
 
         self.face_projection_layer = self.face_projection_layer.to(device)
 
+        # Freeze parameters in the VAE
+        for param in self.vae.parameters():
+            param.requires_grad = False
+
+        # Freeze parameters in the UNet
+        for param in self.unet.parameters():
+            param.requires_grad = False
+
+        # Freeze parameters in the text_encoder
+        for param in self.text_encoder.parameters():
+            param.requires_grad = False
+
     @torch.no_grad()
     def __call__(
             self,
