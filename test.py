@@ -1,13 +1,12 @@
 import torch
-from diffusers import AutoencoderKL, UNet2DConditionModel, DPMSolverMultistepScheduler
-from transformers import CLIPTokenizer, CLIPTextModel
+from diffusers import DPMSolverMultistepScheduler
 from model import IDPreservedGenerativeModel
 
 
 def main():
 
     # Initialize the Diffusion Model
-    model = IDPreservedGenerativeModel.from_pretrained("stabilityai/stable-diffusion-2-1", torch_dtype=torch.float16)
+    model = IDPreservedGenerativeModel.from_pretrained("stabilityai/stable-diffusion-2-1", torch_dtype=torch.float32)
     model.scheduler = DPMSolverMultistepScheduler.from_config(model.scheduler.config)
 
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
