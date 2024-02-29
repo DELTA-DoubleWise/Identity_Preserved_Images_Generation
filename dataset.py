@@ -2,9 +2,10 @@ import random
 from torch.utils.data import Dataset
 from torch import nn
 from torchvision.transforms import transforms
-from transformers import SegformerImageProcessor, SegformerForSemanticSegmentation, ViTImageProcessor
+from transformers import SegformerImageProcessor, SegformerForSemanticSegmentation, ViTImageProcessor, ViTModel
 from PIL import Image
 from util import get_mask_from_parsing, get_box_from_parsing_tensor, ImageMaskTransforms
+import torch
 
 imagenet_templates_small = [
     'a photo of a {}',
@@ -108,8 +109,9 @@ class FaceDataset(Dataset):
 
         '''Load the VIT model'''
         '''Fine-tune the VIT model from Google Research (base-sized) for face recognition'''
-        # self.vit_face_recog_processor = ViTImageProcessor.from_pretrained(vit_model_path)
-        # self.vit_face_recog_processor.to(device)
+        self.vit_face_recog_processor = ViTImageProcessor.from_pretrained(vit_model_path)
+        self.vit_face_recognition_model = ViTModel.from_pretrained(vit_model_path)
+        self.vit_face_recognition_model.to(device)
 
         '''Load the face images'''
         self.face_img = Image.open(face_img_path)
@@ -139,11 +141,12 @@ class FaceDataset(Dataset):
     def __getitem__(self, idx):
         '''Augment the face images'''
         cur_img, cur_mask_face, cur_mask_hair = self.transformation(self.face_img, self.face_mask, self.hair_mask)
-        # vit_input = self.vit_face_recog_processor(images=cur_img, return_tensors="pt")["pixel_values"][0]
+        vit_input = self.vit_face_recog_processor(images=cur_img, return_tensors="pt")["pixel_values"][0]
+        vit_cls_output = self.vit_face_recognition_model(vit_input.unsqueeze(0).to(dtype=torch.float32)).last_hidden_state[:, 0]
         placeholder_string = "*"
         text = random.choice(imagenet_templates_small).format('%s person' % placeholder_string)
         item = {}
-        # item["vit_input"] = vit_input
+        item["vit_output"] = vit_cls_output
         item["text"] = text
         item["mask_face"] = cur_mask_face
         item["mask_hair"] = cur_mask_hair
