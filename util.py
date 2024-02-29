@@ -73,15 +73,15 @@ def get_box_from_parsing_tensor(image_size, face_mask, hair_mask, target_image_s
     rmin, rmax, cmin, cmax = rmin.item(), rmax.item(), cmin.item(), cmax.item()
     
     # Calculate target padding size
-    target_pad_height = target_image_size[0] * 5 / 4
-    target_pad_width = target_image_size[1] * 5 / 4
+    target_pad_height = target_image_size[0]
+    target_pad_width = target_image_size[1]
     
     if image_size[0] < target_pad_height or image_size[1] < target_pad_width:
-        raise ValueError("Image size is smaller than 5/4 of the target image size.")
+        raise ValueError("Image size is smaller than the target image size.")
     
     # Calculate new box dimensions
-    new_height = max(rmax - rmin, target_image_size[0]) * 5 / 4
-    new_width = max(cmax - cmin, target_image_size[1]) * 5 / 4
+    new_height = max(rmax - rmin, target_image_size[0])
+    new_width = max(cmax - cmin, target_image_size[1])
     
     # Ensure new box does not exceed image_size
     new_height = min(new_height, image_size[0])
@@ -149,14 +149,32 @@ class ImageMaskTransforms:
 
     def get_transformation_params(self):
         do_flip = random.random() > 0.5
-        resize_scale = random.uniform(0.7, 1.0)
+        resize_scale = random.uniform(0.9, 1)
         new_rmin, new_rmax, new_cmin, new_cmax = self.bounding_box
-        margin_height = (new_rmax - new_rmin) * random.uniform(0, 0.1)
-        margin_width = (new_cmax - new_cmin) * random.uniform(0, 0.1)
-        top = new_rmin + margin_height
-        left = new_cmin + margin_width
-        bottom = new_rmax - margin_height
-        right = new_cmax - margin_width
+        
+        # Original margins
+        margin_height = (new_rmax - new_rmin) * random.uniform(0, 0.01)
+        margin_width = (new_cmax - new_cmin) * random.uniform(0, 0.01)
+        
+        # Calculate shifts for both horizontal and vertical directions
+        shift_vertical = (new_rmax - new_rmin) * random.uniform(0, 0.1)  # 0 to 10% vertical shift
+        shift_horizontal = (new_cmax - new_cmin) * random.uniform(0, 0.1)  # 0 to 10% horizontal shift
+        
+        # Apply shifts. Determine direction of the shift (positive or negative)
+        vertical_direction = 1 if random.random() > 0.5 else -1
+        horizontal_direction = 1 if random.random() > 0.5 else -1
+        
+        top = new_rmin + margin_height + (shift_vertical * vertical_direction)
+        left = new_cmin + margin_width + (shift_horizontal * horizontal_direction)
+        bottom = new_rmax - margin_height + (shift_vertical * vertical_direction)
+        right = new_cmax - margin_width + (shift_horizontal * horizontal_direction)
+        
+        # Ensure that the shifts do not invert the bounding box coordinates
+        top = max(min(top, bottom), new_rmin)
+        left = max(min(left, right), new_cmin)
+        bottom = min(max(bottom, top), new_rmax)
+        right = min(max(right, left), new_cmax)
+
         margins = (top, left, bottom, right)
         return do_flip, resize_scale, margins
 
