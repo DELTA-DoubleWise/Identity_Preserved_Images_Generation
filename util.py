@@ -101,10 +101,9 @@ def get_box_from_parsing_tensor(image_size, face_mask, hair_mask, target_image_s
 
 '''Class to apply all transformations, including the RandomCropResizePad with a bounding box'''
 class ImageMaskTransforms:
-    def __init__(self, image_size, bounding_box, pad_value=(0, 0, 0)):
+    def __init__(self, image_size, bounding_box):
         self.image_size = image_size
         self.bounding_box = bounding_box
-        self.pad_value = pad_value
         self.to_tensor = transforms.ToTensor()
         self.color_jitter = transforms.ColorJitter(brightness=(0.8, 1.2), contrast=(0.8, 1.2), saturation=(0.8, 1.2), hue=0.01)
 
@@ -116,13 +115,36 @@ class ImageMaskTransforms:
         new_width = int((right - left) * resize_scale)
         new_height = int((bottom - top) * resize_scale)
         img = img.resize((new_width, new_height), Image.BILINEAR)
+
         padding_left = (self.image_size[0] - new_width) // 2
         padding_top = (self.image_size[1] - new_height) // 2
         padding_right = self.image_size[0] - new_width - padding_left
         padding_bottom = self.image_size[1] - new_height - padding_top
-        img = ImageOps.expand(img, border=(padding_left, padding_top, padding_right, padding_bottom), fill=self.pad_value)
+
+        # Check if padding is negative
+        if padding_left < 0 or padding_top < 0 or padding_right < 0 or padding_bottom < 0:
+            # Calculate the scale to fit the image within self.image_size
+            scale_width = self.image_size[0] / new_width
+            scale_height = self.image_size[1] / new_height
+            scale = min(scale_width, scale_height)  # Choose the smaller scale to ensure the image fits within the size
+
+            # Recalculate dimensions based on the new scale
+            new_width = int(new_width * scale)
+            new_height = int(new_height * scale)
+            img = img.resize((new_width, new_height), Image.BILINEAR)
+
+            # Center the image and calculate new padding (should be non-negative now)
+            padding_left = (self.image_size[0] - new_width) // 2
+            padding_top = (self.image_size[1] - new_height) // 2
+            padding_right = self.image_size[0] - new_width - padding_left
+            padding_bottom = self.image_size[1] - new_height - padding_top
+
+        # Apply padding if necessary (now ensured to be non-negative)
+        img = ImageOps.expand(img, border=(padding_left, padding_top, padding_right, padding_bottom))
+
         if apply_color_jitter:
             img = self.color_jitter(img)
+
         return img
 
     def get_transformation_params(self):
@@ -156,6 +178,8 @@ class ImageMaskTransforms:
 
         if mask1 is not None:
             mask1_pil = self.tensor_to_pil(mask1.float())  # Convert boolean mask tensor to float tensor before to PIL
+            save_path = "transformed_image.jpg"
+            mask1_pil.save(save_path)
             mask1_pil = self.transform(mask1_pil, do_flip, resize_scale, margins)
             mask1_tensor_transformed = self.pil_to_tensor(mask1_pil).bool()  # Convert back to boolean tensor
             combined_mask_tensor |= mask1_tensor_transformed.squeeze()

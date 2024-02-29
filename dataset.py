@@ -108,8 +108,8 @@ class FaceDataset(Dataset):
 
         '''Load the VIT model'''
         '''Fine-tune the VIT model from Google Research (base-sized) for face recognition'''
-        self.vit_face_recog_processor = ViTImageProcessor.from_pretrained(vit_model_path)
-        self.vit_face_recog_processor.to(device)
+        # self.vit_face_recog_processor = ViTImageProcessor.from_pretrained(vit_model_path)
+        # self.vit_face_recog_processor.to(device)
 
         '''Load the face images'''
         self.face_img = Image.open(face_img_path)
@@ -131,7 +131,7 @@ class FaceDataset(Dataset):
         bounding_box = get_box_from_parsing_tensor(self.face_img.size, self.face_mask, self.hair_mask, (tar_image_size, tar_image_size))
 
         '''Transform the face images'''
-        self.transformation = ImageMaskTransforms(tar_image_size=self.tar_img_size, bounding_box=bounding_box)
+        self.transformation = ImageMaskTransforms(image_size=(self.tar_img_size, self.tar_img_size), bounding_box=bounding_box)
 
     def __len__(self):
         return self.length
@@ -139,11 +139,11 @@ class FaceDataset(Dataset):
     def __getitem__(self, idx):
         '''Augment the face images'''
         cur_img, cur_mask_face, cur_mask_hair = self.transformation(self.face_img, self.face_mask, self.hair_mask)
-        vit_input = self.vit_face_recog_processor(images=cur_img, return_tensors="pt")["pixel_values"][0]
+        # vit_input = self.vit_face_recog_processor(images=cur_img, return_tensors="pt")["pixel_values"][0]
         placeholder_string = "*"
         text = random.choice(imagenet_templates_small).format('%s person' % placeholder_string)
         item = {}
-        item["vit_input"] = vit_input
+        # item["vit_input"] = vit_input
         item["text"] = text
         item["mask_face"] = cur_mask_face
         item["mask_hair"] = cur_mask_hair
