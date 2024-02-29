@@ -67,10 +67,3 @@ class StyleVectorizer(nn.Module):
         return self.norm(self.net(x))
 
 
-def get_rep_pos(tokenized: torch.Tensor, rep_tokens: list):
-    pos_list = []
-    # for token in rep_tokens:
-    #     pos_list.append(torch.where(tokenized == token).cpu().numpy())
-    for token in rep_tokens:
-        pos_list = torch.stack(torch.where(tokenized == token)).T.tolist()
-    return pos_list

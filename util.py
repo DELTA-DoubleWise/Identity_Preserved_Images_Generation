@@ -204,3 +204,12 @@ class ImageMaskTransforms:
 
         # Return transformed image and masks
         return img_tensor_transformed, mask1_tensor_transformed if mask1 is not None else None, mask2_tensor_transformed if mask2 is not None else None
+
+
+def get_rep_pos(tokenized: torch.Tensor, rep_tokens: list):
+    pos_list = []
+    # for token in rep_tokens:
+    #     pos_list.append(torch.where(tokenized == token).cpu().numpy())
+    for token in rep_tokens:
+        pos_list = torch.stack(torch.where(tokenized == token)).T.tolist()
+    return pos_list
