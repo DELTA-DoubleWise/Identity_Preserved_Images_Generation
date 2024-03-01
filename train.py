@@ -20,15 +20,19 @@ def train_model(model, data_loader, device, num_epochs=10, learning_rate=1e-4):
     - learning_rate: Learning rate for the optimizer.
     """
     model = model.to(device)
-    optimizer = Adam(model.parameters(), lr=learning_rate)
+    optimizer = Adam(model.face_projection_layer.parameters(), lr=learning_rate)
 
     # Training loop
     for epoch in range(num_epochs):
-        model.train()  # Set the model to training mode
+        model.face_projection_layer.train()  # Set the model to training mode
         total_loss = 0
 
         for batch in tqdm(data_loader):
-            pixel_values, prompt, image_embedding, face_mask, hair_mask = [item.to(device) for item in batch]
+            image_embedding = batch["vit_output"].to(device)
+            face_mask = batch["mask_face"].to(device)
+            hair_mask = batch["mask_hair"].to(device)
+            pixel_values = batch["face_img"].to(device)
+            prompt = batch['text']
 
             # Forward pass
             model_pred, loss = model(
@@ -56,9 +60,9 @@ def train_model(model, data_loader, device, num_epochs=10, learning_rate=1e-4):
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-face_img_path = './data'  # replace it with real path
+face_img_path = './donald_img.jpg'  # replace it with real path
 dataset = FaceDataset(face_img_path, device)
-data_loader = DataLoader(dataset, batch_size=4, shuffle=True)
+data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
 # Load and prepare your model
 model = IDPreservedGenerativeModel.from_pretrained("stabilityai/stable-diffusion-2-1", torch_dtype=torch.float32)
