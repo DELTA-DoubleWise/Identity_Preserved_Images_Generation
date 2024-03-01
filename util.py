@@ -211,14 +211,14 @@ class ImageMaskTransforms:
         # Apply the combined mask to the image tensor
         img_tensor_transformed *= combined_mask_tensor.unsqueeze(0).repeat(3, 1, 1)  # Ensure mask applies to all channels
 
-        # Save the transformed image for logging purposes
-        save_path = "transformed_image.jpg"
-        transformed_image_pil = self.tensor_to_pil(img_tensor_transformed)
-        transformed_image_pil.save(save_path)
+        # # Save the transformed image for logging purposes
+        # save_path = "transformed_image.jpg"
+        # transformed_image_pil = self.tensor_to_pil(img_tensor_transformed)
+        # transformed_image_pil.save(save_path)
 
-        # Print log message with details
-        print(f"Transformation applied: {'Flip' if do_flip else 'No flip'}, Resize scale: {resize_scale}, Margins: {margins}")
-        print(f"Transformed image saved at: {os.path.abspath(save_path)}")
+        # # Print log message with details
+        # print(f"Transformation applied: {'Flip' if do_flip else 'No flip'}, Resize scale: {resize_scale}, Margins: {margins}")
+        # print(f"Transformed image saved at: {os.path.abspath(save_path)}")
 
         # Return transformed image and masks
         return img_tensor_transformed, mask1_tensor_transformed if mask1 is not None else None, mask2_tensor_transformed if mask2 is not None else None
