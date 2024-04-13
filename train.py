@@ -6,7 +6,9 @@ from dataset import FaceDataset
 from model import IDPreservedGenerativeModel
 from torch.optim import Adam
 from tqdm import tqdm
+from torch.cuda.amp import autocast, GradScaler
 
+DTYPE = torch.float16
 
 def train_model(model, data_loader, device, num_epochs=10, learning_rate=1e-4):
     """
@@ -21,7 +23,9 @@ def train_model(model, data_loader, device, num_epochs=10, learning_rate=1e-4):
     """
     model = model.to(device)
     optimizer = Adam(model.face_projection_layer.parameters(), lr=learning_rate)
-
+    # scaler = GradScaler()
+    
+    print("Start Training...")
     # Training loop
     for epoch in range(num_epochs):
         model.face_projection_layer.train()  # Set the model to training mode
@@ -35,6 +39,7 @@ def train_model(model, data_loader, device, num_epochs=10, learning_rate=1e-4):
             prompt = batch['text']
 
             # Forward pass
+            # with autocast():
             model_pred, loss = model(
                 prompt=prompt,
                 pixel_values=pixel_values,
@@ -43,11 +48,18 @@ def train_model(model, data_loader, device, num_epochs=10, learning_rate=1e-4):
                 hair_mask=hair_mask,
                 device=device
             )
+                
+            # optimizer.zero_grad()
+            # scaler.scale(loss).backward()  # Scale the loss before the backward pass
+            # scaler.step(optimizer)  # Adjust the optimizer's step
+            # scaler.update()  # Update the scale for next iteration
 
             # Backward pass and optimize
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            
+            print(loss.item())
 
             total_loss += loss.item()
 
@@ -59,13 +71,17 @@ def train_model(model, data_loader, device, num_epochs=10, learning_rate=1e-4):
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"device: {device}")
 
 face_img_path = './donald_img.jpg'  # replace it with real path
+print("Creating Dataset...")
 dataset = FaceDataset(face_img_path, device)
+print("Dataset Created!")
 data_loader = DataLoader(dataset, batch_size=32, shuffle=True)
 
 # Load and prepare your model
-model = IDPreservedGenerativeModel.from_pretrained("stabilityai/stable-diffusion-2-1", torch_dtype=torch.float32)
+print("Loading Pretrained Model...")
+model = IDPreservedGenerativeModel.from_pretrained("stabilityai/stable-diffusion-2-1", torch_dtype=DTYPE)
 model.scheduler = DPMSolverMultistepScheduler.from_config(model.scheduler.config)
 model.load_adaptor(device=device)
 

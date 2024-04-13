@@ -200,12 +200,14 @@ class ImageMaskTransforms:
             mask1_pil.save(save_path)
             mask1_pil = self.transform(mask1_pil, do_flip, resize_scale, margins)
             mask1_tensor_transformed = self.pil_to_tensor(mask1_pil).bool()  # Convert back to boolean tensor
+            # mask1_tensor_transformed = self.pil_to_tensor(mask1_pil)
             combined_mask_tensor |= mask1_tensor_transformed.squeeze()
 
         if mask2 is not None:
             mask2_pil = self.tensor_to_pil(mask2.float())  # Same conversion as for mask1
             mask2_pil = self.transform(mask2_pil, do_flip, resize_scale, margins)
             mask2_tensor_transformed = self.pil_to_tensor(mask2_pil).bool()
+            # mask2_tensor_transformed = self.pil_to_tensor(mask2_pil)
             combined_mask_tensor |= mask2_tensor_transformed.squeeze()
 
         # Apply the combined mask to the image tensor

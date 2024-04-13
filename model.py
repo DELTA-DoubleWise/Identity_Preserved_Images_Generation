@@ -49,11 +49,11 @@ class IDPreservedGenerativeModel(StableDiffusionPipeline):
     @validate_hf_hub_args
     def load_adaptor(
             self,
-            vit_out_dim: int = 512,
+            vit_out_dim: int = 768,
             token_dim: int = 1024,
             mlp_depth: int = 2,
             num_embeds_per_token: int = 2,
-            weight_dtype: Optional[torch.dtype] = torch.float32,
+            weight_dtype: Optional[torch.dtype] = torch.float16,
             device: Optional[Union[str, torch.device]] = None,
             # pretrained_model_name_or_path_or_dict: Union[str, Dict[str, torch.Tensor]],
             **kwargs
@@ -65,8 +65,6 @@ class IDPreservedGenerativeModel(StableDiffusionPipeline):
         self.token_dim = token_dim
 
         self.face_projection_layer = StyleVectorizer(vit_out_dim, token_dim * self.num_es, depth=mlp_depth, lr_mul=0.1)
-
-        self.face_projection_layer = self.face_projection_layer.to(device)
 
         # Freeze parameters in the VAE
         for param in self.vae.parameters():
@@ -80,7 +78,6 @@ class IDPreservedGenerativeModel(StableDiffusionPipeline):
         for param in self.text_encoder.parameters():
             param.requires_grad = False
 
-    @torch.no_grad()
     def __call__(
             self,
             prompt: Union[str, List[str]] = None,
@@ -110,11 +107,17 @@ class IDPreservedGenerativeModel(StableDiffusionPipeline):
             hair_mask: Optional[torch.Tensor] = None,
             device: Optional[Union[str, torch.device]] = None,
     ):
-        self.vae.to(device, dtype=self.weight_dtype)
-        self.unet.to(device, dtype=self.weight_dtype)
-        self.text_encoder.to(device, dtype=self.weight_dtype)
+
+        self.vae = self.vae.to(device, dtype=self.weight_dtype)
+        self.unet = self.unet.to(device, dtype=self.weight_dtype)
+        self.text_encoder = self.text_encoder.to(device, dtype=self.weight_dtype)
+        self.face_projection_layer = self.face_projection_layer.to(device, dtype=self.weight_dtype)
+        
+        # print(f"Tensor's data type: {pixel_values.dtype}")
+        # print("pixel_values.shape: ",pixel_values.shape)
 
         latents = self.vae.encode(pixel_values).latent_dist.sample()
+        # print("latents.shape: ",latents.shape)
         latents = latents * self.vae.config.scaling_factor
 
         # Sample noise that we'll add to the latents
@@ -127,8 +130,13 @@ class IDPreservedGenerativeModel(StableDiffusionPipeline):
         timestep = timestep.long()
 
         encoder_hidden_states = self.encode_prompt(prompt, device, 1, False)[0]
-        residual_embedding = self.face_projection_layer(image_embedding).view(batch_size, self.num_es, self.token_dim)
 
+        residual_embedding = self.face_projection_layer(image_embedding).view(batch_size, self.num_es, self.token_dim).to(dtype=self.weight_dtype)
+        
+        # print(f"residual_embedding's data type:{residual_embedding.dtype}")
+        # print(f"residual_embedding's data type:{residual_embedding.dtype}")
+        # print(f"encoder_hidden_states's data type:{encoder_hidden_states.dtype}")
+        
         tokenized_text = self.tokenizer(
             prompt,
             padding="max_length",
@@ -147,12 +155,21 @@ class IDPreservedGenerativeModel(StableDiffusionPipeline):
         # noisy_latents, sqrt_alpha_prod, sqrt_one_minus_alpha_prod = self.scheduler.add_noise(latents, noise, timestep)
         noisy_latents = self.scheduler.add_noise(latents, noise, timestep)
 
-        model_pred = self.unet(noisy_latents.float(), timestep, encoder_hidden_states).sample
+        model_pred = self.unet(noisy_latents.to(self.weight_dtype), timestep, encoder_hidden_states).sample
+        
+        # print("noise.shape: ",noise.shape)
+        # print("noisy_latents.shape: ",noisy_latents.shape)
+        # print(self.unet)
+        # print("model_pred.shape: ",model_pred.shape)
+        # print("face_mask.shape ",face_mask.shape)
+        # print("hair_mask.shape ",hair_mask.shape)
 
         # loss = None
 
         # print(face_mask.shape, hair_mask.shape, model_pred.shape, noise.shape)
-
+        
+        print(noisy_latents[0])
+        print(model_pred[0])
         loss = masked_diffusion_loss(face_mask, hair_mask, model_pred, noise)
 
         return model_pred, loss
