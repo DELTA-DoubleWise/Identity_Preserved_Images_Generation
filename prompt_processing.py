@@ -20,8 +20,8 @@ def story_to_prompts(story, metadata):
 \nYour output should follow the following format: "...", "...", "..."
 In this format, please use a quotation mark around each sentence and print a comma between each two sentence. \n
 The prompt should follow the following rules:\n
-1. Use simple language. \n
-2. In each prompt, please parse the story in the correct way to understand it, retain all the full names (please show both first name and last name). Please avoid using any form of pronouns and ambiguous phrases in the text. This includes common personal pronouns such as 'I', 'you', 'he', 'she', 'it', 'they', as well as any expressions that could be unclear, like 'those two people', 'that object'. Ensure each description specifically identifies its subject, using exact full names or clear descriptions, to maintain clarity and independence in the content.\n
+1. Use simple language and words. \n
+2. In each prompt, please parse the story in the correct way to understand it, retain all the full names (please show both first name and last name). Please avoid using any form of pronouns and ambiguous phrases in the text. This includes common personal pronouns such as 'I', 'you', 'he', 'she', 'it', 'they', as well as any expressions that could be unclear, like 'those two people', 'that object'. Ensure each description specifically identifies its subject, using exact full names including first name and last name or clear descriptions, to maintain clarity and independence in the content.\n
 3.Your prompt should follow the development of the story. Each prompt should correspond to one event in the story. \n
 4.You do not need to expand the story. Please do not add any details that aren't mentioned. \n
 5. All you need to do is segment the long text into small self-contained sentences. Please make each sentence the smallest unit, i.e. encapsulating one simple action. \n
