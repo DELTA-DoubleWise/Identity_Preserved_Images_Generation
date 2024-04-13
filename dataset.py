@@ -152,3 +152,10 @@ class FaceDataset(Dataset):
         item["mask_hair"] = cur_mask_hair
         item["face_img"] = cur_img
         return item
+
+    def get_vit_cls_output(self):
+        face_img = self.face_img
+        vit_input = self.vit_face_recog_processor(images=face_img, return_tensors="pt")["pixel_values"][0]
+        vit_input = vit_input.to(self.device)
+        vit_cls_output = self.vit_face_recognition_model(vit_input.unsqueeze(0).to(dtype=self.dtype)).last_hidden_state[:, 0]
+        return vit_cls_output.to(dtype=self.dtype)
