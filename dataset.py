@@ -6,6 +6,8 @@ from transformers import SegformerImageProcessor, SegformerForSemanticSegmentati
 from PIL import Image
 from util import get_mask_from_parsing, get_box_from_parsing_tensor, ImageMaskTransforms
 import torch
+from torch.cuda.amp import autocast, GradScaler
+import torch.nn.functional as F
 
 imagenet_templates_small = [
     'a photo of a {}',
@@ -95,11 +97,20 @@ class FaceDataset(Dataset):
     def __init__(self,
                  face_img_path,
                  device,
-                 tar_image_size=512,
+                 tar_image_size=256, #512
                  face_parser_model_path="jonathandinu/face-parsing",
                  vit_model_path="jayanta/google-vit-base-patch16-224-face",
-                 augment_len=1000,):
+                 augment_len=1000,
+                 dtype= torch.float16,):
         super(FaceDataset, self).__init__()
+        
+        self.device = device
+        self.dtype = dtype
+        
+        if tar_image_size == 256:
+            self.mask_size = 32
+        elif tar_image_size == 512:
+            self.mask_size = 64
 
         '''Load the face parser model'''
         '''Fine-tune the face parser model from SegFormer (b5-sized)'''
@@ -141,16 +152,27 @@ class FaceDataset(Dataset):
     def __getitem__(self, idx):
         '''Augment the face images'''
         cur_img, cur_mask_face, cur_mask_hair = self.transformation(self.face_img, self.face_mask, self.hair_mask)
+        
+        face_mask_resize = F.interpolate(cur_mask_face.unsqueeze(0).float(), (self.mask_size, self.mask_size), mode='bicubic', align_corners=True)[0]
+        face_mask_resize[face_mask_resize >= 0.5] = 1
+        face_mask_resize[face_mask_resize < 0.5] = 0
+        
+        hair_mask_resize = F.interpolate(cur_mask_hair.unsqueeze(0).float(), (self.mask_size, self.mask_size), mode='bicubic', align_corners=True)[0]
+        hair_mask_resize[hair_mask_resize >= 0.5] = 1
+        hair_mask_resize[hair_mask_resize < 0.5] = 0
+        
         vit_input = self.vit_face_recog_processor(images=cur_img, return_tensors="pt")["pixel_values"][0]
-        vit_cls_output = self.vit_face_recognition_model(vit_input.unsqueeze(0).to(dtype=torch.float32)).last_hidden_state[:, 0]
+        vit_input = vit_input.to(self.device)
+        # with autocast():
+        vit_cls_output = self.vit_face_recognition_model(vit_input.unsqueeze(0).to(dtype=self.dtype)).last_hidden_state[:, 0]
         placeholder_string = "*"
         text = random.choice(imagenet_templates_small).format('%s person' % placeholder_string)
         item = {}
-        item["vit_output"] = vit_cls_output
+        item["vit_output"] = vit_cls_output.to(dtype=self.dtype)
         item["text"] = text
-        item["mask_face"] = cur_mask_face
-        item["mask_hair"] = cur_mask_hair
-        item["face_img"] = cur_img
+        item["mask_face"] = face_mask_resize.to(dtype=self.dtype)
+        item["mask_hair"] = hair_mask_resize.to(dtype=self.dtype)
+        item["face_img"] = cur_img.to(dtype=self.dtype)
         return item
 
     def get_vit_cls_output(self):
