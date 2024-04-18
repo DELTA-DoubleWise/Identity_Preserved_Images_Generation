@@ -14,7 +14,7 @@ import os
 DTYPE = torch.float16
 MAX_TRAINING_STEP = 501
 
-def train_model(model, data_loader, dataset, device, num_epochs=1, learning_rate=5e-5):
+def train_model(model, data_loader, preprocessed_image, save_path, device, num_epochs=1, learning_rate=5e-5):
     """
     Trains the IDPreservedGenerativeModel model.
 
@@ -30,14 +30,14 @@ def train_model(model, data_loader, dataset, device, num_epochs=1, learning_rate
     scaler = GradScaler()
     global_step = 0
     print("Start Training...")
-    original_img_vit_cls_output = dataset.get_vit_cls_output()
+    
     # Training loop
     for epoch in range(num_epochs):
         model.face_projection_layer.train()  # Set the model to training mode
         total_loss = 0
 
         for batch in tqdm(data_loader):
-            if global_step>=MAX_TRAINING_STEP:
+            if global_step>MAX_TRAINING_STEP:
                 break
                 
             global_step += 1
@@ -65,33 +65,46 @@ def train_model(model, data_loader, dataset, device, num_epochs=1, learning_rate
             scaler.step(optimizer)  # Adjust the optimizer's step
             scaler.update()  # Update the scale for next iteration
 
+            # Check for NaN gradients and parameters after optimizer step
+            # for name, param in model.face_projection_layer.named_parameters():
+            #     if torch.isnan(param.data).any():
+            #         print(f"NaN values detected in {name} parameters after optimizer step")
+            #     if param.grad is not None and torch.isnan(param.grad).any():
+            #         print(f"NaN gradients detected in {name} after optimizer step")
+
             total_loss += loss.item()
-            
-            save_path = os.path.join("./test_result",f"{dataset.get_img_name()}-{global_step}.pt")
-            if global_step%100==0:
-                model.save(original_img_vit_cls_output, save_path)
+
+            if global_step == MAX_TRAINING_STEP:
+                model.save(preprocessed_image, save_path)
 
         avg_loss = total_loss / len(data_loader)
         print(f"Epoch [{epoch+1}/{num_epochs}], Average Loss: {avg_loss:.4f}")
-
-
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"device: {device}")
-
-## test image
-face_img_path = '00001.png'  # replace it with real path 
+        
+        
+def train_image(img_path, pt_file_path):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"device: {device}")
     
-print("Creating Dataset...")
-dataset = FaceDataset(face_img_path, device)
-print("Dataset Created!")
-data_loader = DataLoader(dataset, batch_size=1, shuffle=True)
+    print("Creating Dataset...")
+    dataset = FaceDataset(img_path, device)
+    original_img_vit_cls_output = dataset.get_vit_cls_output()
+    print("Dataset Created!")
+    data_loader = DataLoader(dataset, batch_size=1, shuffle=True)
+    
+    # Load and prepare your model
+    print("Loading Pretrained Model...")
+    model = IDPreservedGenerativeModel.from_pretrained("stabilityai/stable-diffusion-2-1",torch_dtype=torch.float32)
+    model.scheduler = DPMSolverMultistepScheduler.from_config(model.scheduler.config)
+    model.load_adaptor(device=device)
+    
+    # Call the training function
+    train_model(model, data_loader, original_img_vit_cls_output, pt_file_path, device)
+    
+    
+if __name__ == "__main__":
+    ## test image
+    face_img_path = '00001.png'  # replace it with real path 
+    pt_file_path = 'test_result/00001.pt'
+    
 
-# Load and prepare your model
-print("Loading Pretrained Model...")
-model = IDPreservedGenerativeModel.from_pretrained("stabilityai/stable-diffusion-2-1",torch_dtype=torch.float32)
-model.scheduler = DPMSolverMultistepScheduler.from_config(model.scheduler.config)
-model.load_adaptor(device=device)
 
-# Call the training function
-train_model(model, data_loader, dataset, device, num_epochs=1, learning_rate=5e-5)
