@@ -8,6 +8,7 @@ from util import get_mask_from_parsing, get_box_from_parsing_tensor, ImageMaskTr
 import torch
 from torch.cuda.amp import autocast, GradScaler
 import torch.nn.functional as F
+import os
 
 imagenet_templates_small = [
     'a photo of a {}',
@@ -97,15 +98,16 @@ class FaceDataset(Dataset):
     def __init__(self,
                  face_img_path,
                  device,
-                 tar_image_size=256, #512
+                 tar_image_size=512, #512
                  face_parser_model_path="jonathandinu/face-parsing",
                  vit_model_path="jayanta/google-vit-base-patch16-224-face",
                  augment_len=1000,
-                 dtype= torch.float16,):
+                 dtype=torch.float32,):
         super(FaceDataset, self).__init__()
         
         self.device = device
         self.dtype = dtype
+        self.face_img_path = face_img_path
         
         if tar_image_size == 256:
             self.mask_size = 32
@@ -163,21 +165,26 @@ class FaceDataset(Dataset):
         
         vit_input = self.vit_face_recog_processor(images=cur_img, return_tensors="pt")["pixel_values"][0]
         vit_input = vit_input.to(self.device)
+        
         # with autocast():
-        vit_cls_output = self.vit_face_recognition_model(vit_input.unsqueeze(0).to(dtype=self.dtype)).last_hidden_state[:, 0]
+        vit_cls_output = self.vit_face_recognition_model(vit_input.unsqueeze(0).to(self.device)).last_hidden_state[:, 0]
+
         placeholder_string = "*"
         text = random.choice(imagenet_templates_small).format('%s person' % placeholder_string)
         item = {}
-        item["vit_output"] = vit_cls_output.to(dtype=self.dtype)
+        item["vit_output"] = vit_cls_output
         item["text"] = text
-        item["mask_face"] = face_mask_resize.to(dtype=self.dtype)
-        item["mask_hair"] = hair_mask_resize.to(dtype=self.dtype)
-        item["face_img"] = cur_img.to(dtype=self.dtype)
+        item["mask_face"] = face_mask_resize
+        item["mask_hair"] = hair_mask_resize
+        item["face_img"] = cur_img
         return item
-
+    
     def get_vit_cls_output(self):
         face_img = self.face_img
         vit_input = self.vit_face_recog_processor(images=face_img, return_tensors="pt")["pixel_values"][0]
         vit_input = vit_input.to(self.device)
-        vit_cls_output = self.vit_face_recognition_model(vit_input.unsqueeze(0).to(dtype=self.dtype)).last_hidden_state[:, 0]
-        return vit_cls_output.to(dtype=self.dtype)
+        vit_cls_output = self.vit_face_recognition_model(vit_input.unsqueeze(0).to(self.device)).last_hidden_state[:, 0]
+        return vit_cls_output
+    
+    def get_img_name(self):
+        return os.path.basename(self.face_img_path)[:-4]
