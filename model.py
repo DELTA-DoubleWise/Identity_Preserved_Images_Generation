@@ -31,10 +31,6 @@ def get_clip_token_for_string(tokenizer, string):
     return tokens
 
 
-# def get_embedding_for_clip_token(embedder, token):
-#     return embedder(token.unsqueeze(0))
-
-
 def masked_diffusion_loss(face_mask, hair_mask, model_pred, target, l_hair_diff_lambda=0.1):
     fg_loss_noise = F.mse_loss(face_mask * model_pred.float(),
                                face_mask * target.float(), reduction="mean")
@@ -106,18 +102,13 @@ class IDPreservedGenerativeModel(StableDiffusionPipeline):
             face_mask: Optional[torch.Tensor] = None,
             hair_mask: Optional[torch.Tensor] = None,
             device: Optional[Union[str, torch.device]] = None,
-    ):
-
-        self.vae = self.vae.to(device, dtype=self.weight_dtype)
-        self.unet = self.unet.to(device, dtype=self.weight_dtype)
-        self.text_encoder = self.text_encoder.to(device, dtype=self.weight_dtype)
-        self.face_projection_layer = self.face_projection_layer.to(device, dtype=self.weight_dtype)
-        
-        # print(f"Tensor's data type: {pixel_values.dtype}")
-        # print("pixel_values.shape: ",pixel_values.shape)
+    ):  
+        self.vae = self.vae.to(device)
+        self.unet = self.unet.to(device)
+        self.text_encoder = self.text_encoder.to(device)
+        self.face_projection_layer = self.face_projection_layer.to(device)
 
         latents = self.vae.encode(pixel_values).latent_dist.sample()
-        # print("latents.shape: ",latents.shape)
         latents = latents * self.vae.config.scaling_factor
 
         # Sample noise that we'll add to the latents
@@ -131,12 +122,15 @@ class IDPreservedGenerativeModel(StableDiffusionPipeline):
 
         encoder_hidden_states = self.encode_prompt(prompt, device, 1, False)[0]
 
-        residual_embedding = self.face_projection_layer(image_embedding).view(batch_size, self.num_es, self.token_dim).to(dtype=self.weight_dtype)
-        
-        # print(f"residual_embedding's data type:{residual_embedding.dtype}")
-        # print(f"residual_embedding's data type:{residual_embedding.dtype}")
-        # print(f"encoder_hidden_states's data type:{encoder_hidden_states.dtype}")
-        
+        if torch.isnan(encoder_hidden_states).any():
+            print("NaN values found in encoder_hidden_states after encoding")
+
+        for param in self.face_projection_layer.parameters():
+            if torch.isnan(param).any():
+                print("NaN values found in face_projection_layer parameters")
+
+        residual_embedding = self.face_projection_layer(image_embedding).view(batch_size, self.num_es, self.token_dim)
+
         tokenized_text = self.tokenizer(
             prompt,
             padding="max_length",
@@ -154,22 +148,12 @@ class IDPreservedGenerativeModel(StableDiffusionPipeline):
         # forward diffusion
         # noisy_latents, sqrt_alpha_prod, sqrt_one_minus_alpha_prod = self.scheduler.add_noise(latents, noise, timestep)
         noisy_latents = self.scheduler.add_noise(latents, noise, timestep)
-
-        model_pred = self.unet(noisy_latents.to(self.weight_dtype), timestep, encoder_hidden_states).sample
-        
-        # print("noise.shape: ",noise.shape)
-        # print("noisy_latents.shape: ",noisy_latents.shape)
-        # print(self.unet)
-        # print("model_pred.shape: ",model_pred.shape)
-        # print("face_mask.shape ",face_mask.shape)
-        # print("hair_mask.shape ",hair_mask.shape)
-
-        # loss = None
-
-        # print(face_mask.shape, hair_mask.shape, model_pred.shape, noise.shape)
-        
-        print(noisy_latents[0])
-        print(model_pred[0])
+        model_pred = self.unet(noisy_latents, timestep, encoder_hidden_states).sample
         loss = masked_diffusion_loss(face_mask, hair_mask, model_pred, noise)
 
         return model_pred, loss
+
+    def save(self, face_img_embeddings, emb_path):
+        # save embeddings
+        residual_embedding = self.face_projection_layer(face_img_embeddings).view(face_img_embeddings.shape[0], self.num_es, self.token_dim)
+        torch.save(residual_embedding, emb_path)
