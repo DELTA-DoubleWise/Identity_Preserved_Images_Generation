@@ -14,7 +14,7 @@ def story_to_prompts(story, metadata):
     character_info = "\n".join(f"Character {index + 1}: {name}" for index, name in enumerate(metadata))
     story_str = f"\nStory: {story}"
     
-    gemma_prompt = f"""Please segment the following script into a list of prompts. Each prompt will be used to generate an image in a diffusion model.\n
+    gemma_prompt = f"""Please segment the following script into a list of prompts. Each prompt will be used to generate an image in a stable diffusion model.\n
 {character_info}\n{story_str}
     
 \nYour output should follow the following format: "...", "...", "..."
@@ -39,19 +39,8 @@ def prompts_parse(prompts_text, metadata):
         prompts_text = prompts_text.replace(name, signal_word)
     
     # Extract prompts and append " animated, high res" to each
-    prompts = [prompt + " animated, high res" for prompt in re.findall(r'"(.*?)"', prompts_text)]
+    # prompts = ["A photo of " + prompt + ", animated, high resolution" for prompt in re.findall(r'"(.*?)"', prompts_text)]
+    prompts = ["a Picture of " + prompt + "delicate, ultra detailed, illustration, comic style" for prompt in re.findall(r'"(.*?)"', prompts_text)]
+
     return prompts
     
-    
-    
-    
-    
-story = "Chris Martin runs a small music shop. Tim William loves to play the piano and they are good friends. One day, they went to see Lily Swift's concert. They three become good friends. Use simple language."
-
-metadata = {"Chris Martin":{"signal_word":"*v1 *v2"}, "Tim William":{"signal_word":"*v3 *v4"}, "Lily Swift": {"signal_word":"*v5 *v6"}}
-
-story_to_prompts(story, metadata)
-
-text = '"Chris Martin smiles warmly at Tim William.", "Tim William thumbs through a new piano sheet.", "Their laughter echoes in the quiet shop.", "Chris Martin places a hand on Tim William’s shoulder.", "They share a secret grin.", "Tim William confides in Chris Martin about his dream of playing on a bigger stage.", "They walk excitedly towards the city’s music venue.", "Lily Swift’s mesmerizing voice fills the concert hall.", "Chris Martin, Tim William and Lily Swift exchange joyful smiles.", "The three of them become fast friends."'
-
-# prompts_parse(text, metadata)

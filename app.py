@@ -2,7 +2,9 @@ import gradio as gr
 import torch
 from prompt_processing import story_to_prompts, prompts_parse
 from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler, DiffusionPipeline
+from StableIdentity_model.train import train_img_to_embedding
 import re
+import os
 
 pt_paths = []
 name_list = []
@@ -14,6 +16,11 @@ pipe = StableDiffusionPipeline.from_pretrained(model_path)
 pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 pipe = pipe.to(device)
 
+def abs_path(rel_path):
+    dir_path = os.path.dirname(os.path.realpath(__file__))  # Get the directory of the script
+    abs_file_path = os.path.join(dir_path, rel_path)
+    return abs_file_path
+
 
 def process_images(image_files, names):
     display_images = []
@@ -21,16 +28,22 @@ def process_images(image_files, names):
     global name_list
     pt_paths = []
     name_list = []
-    # for image, name in zip(image_files, names.split(",")):  # Assuming names are comma-separated
-    #     # Here you would process your image and generate a .pt file
-    #     first_name, last_name = name.strip().split(" ")  # Split first and last name
-    #     processed_image_path = f"{"img/"+first_name+"_"+last_name}.png"  # Placeholder for image saving path
-    #     pt_file_path = f"{"face_embeddings"+first_name+"_"+last_name}.pt"  # Placeholder for .pt file path
-    #     processed_images.append(processed_image_path)  # Store processed image path
-    #     name_list.append(name.strip())  # Store names
-    display_images = ["img/Xuezhen_Wang.jpg", "img/Taylor_Swift.jpg", "img/Yucheng_Wang.jpg"]
-    name_list = ["Xuezhen Wang", "Taylor Swift", "Yucheng Wang"]
-    pt_paths = ["face_embeddings/Xuezhen_Wang.pt", "face_embeddings/Taylor_Swift.pt", "face_embeddings/Yucheng_Wang.pt"]
+    for image_tuple, name in zip(image_files, names.split(",")):  # Assuming names are comma-separated
+        # Here you would process your image and generate a .pt file
+        first_name, last_name = name.strip().split(" ")  # Split first and last name
+        image = image_tuple[0]
+        
+        processed_image_path = os.path.join("runtime/img",f"{first_name}_{last_name}.png")  # Placeholder for image saving path
+        image.save(processed_image_path, 'PNG')
+        pt_file_path = os.path.join("runtime/face_embeddings",f"{first_name}_{last_name}.pt")  # Placeholder for .pt file path
+
+        train_img_to_embedding(abs_path(processed_image_path), abs_path(pt_file_path))
+        display_images.append(processed_image_path)  # Store processed image path
+        pt_paths.append(pt_file_path)
+        name_list.append(name.strip())  # Store names
+    # display_images = ["img/Xuezhen_Wang.jpg", "img/Taylor_Swift.jpg", "img/Yucheng_Wang.jpg"]
+    # name_list = ["Xuezhen Wang", "Taylor Swift", "Yucheng Wang"]
+    # pt_paths = ["face_embeddings/Xuezhen_Wang.pt", "face_embeddings/Taylor_Swift.pt", "face_embeddings/Yucheng_Wang.pt"]
     return [(img, name) for img, name in zip(display_images, name_list)], ", ".join(name_list)
 
 def process_text(input_text):
@@ -53,7 +66,6 @@ def load_model_and_generate_images(processed_text):
     pipe.text_encoder.resize_token_embeddings(len(pipe.tokenizer), pad_to_multiple_of = 8)
     for token_id, embedding in zip(token_ids, token_embeddings):
         pipe.text_encoder.get_input_embeddings().weight.data[token_id] = embedding
-
 
     images = []
     for prompt in prompts:
