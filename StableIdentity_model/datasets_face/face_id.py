@@ -169,12 +169,12 @@ class FaceIdDataset(Dataset):
         text = random.choice(imagenet_templates_small).format('%s person' % placeholder_string) 
 
         if random.random() < 0.5:
-            img = torchvision.transforms.functional.hflip(img) 
+            img = torchvision.transforms.functional.hflip(img)
             vit_input = torchvision.transforms.functional.hflip(vit_input)
             face_mask_now = torchvision.transforms.functional.hflip(face_mask_now)
             hair_mask_now = torchvision.transforms.functional.hflip(hair_mask_now)
             
-
+        # print(img_input.size)
         crop_size = (img_input.size[0] - img_input.size[0]//4, img_input.size[0] - img_input.size[0]//4)
         original_size = img_input.size
 
@@ -238,6 +238,11 @@ def tensor_to_arr(tensor):
 def random_crop_and_resize_torch(image, face_mask_now, hair_mask_now, crop_size, original_size):
 
     _, img_height, img_width = image.shape
+    # print(img_height, img_width)
+
+    # # Ensure crop_size does not exceed image dimensions
+    # crop_width = min(crop_size[1], img_width)
+    # crop_height = min(crop_size[0], img_height)
 
     left = torch.randint(0, img_width - crop_size[1] + 1, (1,))
     top = torch.randint(0, img_height - crop_size[0] + 1, (1,))

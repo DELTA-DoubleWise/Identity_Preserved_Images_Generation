@@ -6,6 +6,7 @@ from StableIdentity_model.train import train_img_to_embedding
 import re
 import os
 
+selected_keywords = []
 pt_paths = []
 name_list = []
 meta_data = {}
@@ -32,9 +33,10 @@ def process_images(image_files, names):
         # Here you would process your image and generate a .pt file
         first_name, last_name = name.strip().split(" ")  # Split first and last name
         image = image_tuple[0]
-        
+        os.makedirs("runtime/img", exist_ok=True)
         processed_image_path = os.path.join("runtime/img",f"{first_name}_{last_name}.png")  # Placeholder for image saving path
         image.save(processed_image_path, 'PNG')
+        os.makedirs("runtime/face_embeddings", exist_ok=True)
         pt_file_path = os.path.join("runtime/face_embeddings",f"{first_name}_{last_name}.pt")  # Placeholder for .pt file path
 
         train_img_to_embedding(abs_path(processed_image_path), abs_path(pt_file_path))
@@ -55,7 +57,7 @@ def process_text(input_text):
 def load_model_and_generate_images(processed_text):
     processed_text_list = [prompt for prompt in re.findall(r'"(.*?)"', processed_text)]
     global pt_paths
-    prompts = prompts_parse(processed_text, meta_data)
+    prompts = prompts_parse(processed_text, meta_data, keywords)
     test_embeddings = [torch.load(pt_path).to(device) for pt_path in pt_paths]
     token_embeddings = [item for test_embedding in test_embeddings for item in (test_embedding[:, 0], test_embedding[:, 1])]
     tokens = [f"*v{i+1}" for i in range(len(token_embeddings))]
@@ -80,26 +82,29 @@ def gradio_app():
                 image_input = gr.Gallery(label="Upload Images", type="image", show_label=False)
                 name_input = gr.Textbox(label="Enter Names (name must be of the format 'FirstName LastName') in the order of the uploaded images", placeholder="John Doe, Jane Smith")
                 upload_btn = gr.Button("Upload")
+                
+                # Add a dropdown menu
+                dropdown_options = ["Matisse", "Van Gogh", "Monet"]
+                dropdown_menu = gr.Dropdown(choices=dropdown_options, label="Select an option")
+                
             with gr.Column():
                 processed_image_display = gr.Gallery(label="Uploaded Images with Trained Face Embeddings")
                 name_list_display = gr.Label(label="Names of Uploaded Images")
-
-        text_input = gr.Textbox(label="Enter Stroy Prompt Using the Names Uploaded", placeholder="John Doe and Jane Smith went on a picnic.")
-        processed_text_output = gr.Textbox(label="LLM Processed Story, Please Revise Based on Your Preference", interactive=True)
-        text_process_btn = gr.Button("Process Text")
-
-        final_images_display = gr.Gallery(label="Final Images")
-        generate_images_btn = gr.Button("Generate Comics")
-
+                text_input = gr.Textbox(label="Enter Story Prompt Using the Names Uploaded", placeholder="John Doe and Jane Smith went on a picnic.")
+                processed_text_output = gr.Textbox(label="LLM Processed Story, Please Revise Based on Your Preference", interactive=True)
+                text_process_btn = gr.Button("Process Text")
+                final_images_display = gr.Gallery(label="Final Images")
+                generate_images_btn = gr.Button("Generate Comics")
+                
         # Define interactions
         def update_gallery_and_names(processed_image_names, name_list):
             processed_image_display.update(processed_image_names)
             name_list_display.update("\n".join(name_list))
-
+        
         upload_btn.click(process_images, inputs=[image_input, name_input], outputs=[processed_image_display, name_list_display])
         text_process_btn.click(process_text, inputs=[text_input], outputs=processed_text_output)
         generate_images_btn.click(load_model_and_generate_images, inputs=[processed_text_output], outputs=final_images_display)
-
+        
     demo.launch(share=True)
 
 

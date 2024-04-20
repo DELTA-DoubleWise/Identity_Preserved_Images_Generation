@@ -418,6 +418,7 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
 
     print(f"image path: {processed_image_path}")
     print(f"embedding saving path: {pt_file_path}")
+    os.makedirs(pt_file_path, exist_ok=True)
     pretrained_model_name = "stabilityai/stable-diffusion-2-1-base"
     vit_face_recognition_model_name = "google/vit-base-patch16-224-in21k"
     embedding_manager_config_path = "StableIdentity_model/datasets_face/identity_space.yaml"
