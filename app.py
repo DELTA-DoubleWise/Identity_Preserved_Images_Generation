@@ -84,13 +84,21 @@ def gradio_app():
                 upload_btn = gr.Button("Upload")
                 
                 # A gr.Dataset component for pre-trained images
-                pretrained_images = [("pretrained_images/image1.jpg", "John Doe"),
-                                     ("pretrained_images/image2.jpg", "Jane Smith"),
-                                     # Add more pre-trained images and names
-                                    ]
-                pretrained_dataset = gr.Dataset(components=[gr.Image(), gr.Text()], 
-                                                samples=pretrained_images,
-                                                label="Pre-trained Images (Click to Add)")
+                pretrained_images = [["pretrained_images/Taylor_Swift.png", "Taylor Swift"],
+                     ["pretrained_images/Jane_Smith.png", "Jane Smith"],
+                     # Add more pre-trained images and names
+                    ]
+                pretrained_dataset = gr.Dataset(components=[gr.Image(type="filepath"), gr.Text()], 
+                                samples=pretrained_images,
+                                label="Pre-trained Images (Click to Add)")
+                
+                # pretrained_images = [("pretrained_images/image1.jpg", "John Doe"),
+                #                      ("pretrained_images/image2.jpg", "Jane Smith"),
+                #                      # Add more pre-trained images and names
+                #                     ]
+                # pretrained_dataset = gr.Dataset(components=[gr.Image(), gr.Text()], 
+                #                                 samples=pretrained_images,
+                #                                 label="Pre-trained Images (Click to Add)")
                 
                 # A dropdown menu
                 style_options = ["comic style", "4k", "Van Gogh", "oil painting", "vivid colors"]
