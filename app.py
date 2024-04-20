@@ -54,10 +54,10 @@ def process_text(input_text):
     processed_text = story_to_prompts(input_text, meta_data)
     return processed_text
 
-def load_model_and_generate_images(processed_text):
+def load_model_and_generate_images(processed_text, style_dropdown):
     processed_text_list = [prompt for prompt in re.findall(r'"(.*?)"', processed_text)]
     global pt_paths
-    prompts = prompts_parse(processed_text, meta_data, keywords)
+    prompts = prompts_parse(processed_text, meta_data, style_dropdown)
     test_embeddings = [torch.load(pt_path).to(device) for pt_path in pt_paths]
     token_embeddings = [item for test_embedding in test_embeddings for item in (test_embedding[:, 0], test_embedding[:, 1])]
     tokens = [f"*v{i+1}" for i in range(len(token_embeddings))]
@@ -84,8 +84,8 @@ def gradio_app():
                 upload_btn = gr.Button("Upload")
                 
                 # Add a dropdown menu
-                dropdown_options = ["Matisse", "Van Gogh", "Monet"]
-                dropdown_menu = gr.Dropdown(choices=dropdown_options, label="Select an option")
+                style_options = ["comic style", "4k", "Van Gogh", "oil painting", "vivid colors"]
+                style_dropdown = gr.Dropdown(choices=style_options, label="Select a style")
                 
             with gr.Column():
                 processed_image_display = gr.Gallery(label="Uploaded Images with Trained Face Embeddings")
@@ -103,7 +103,7 @@ def gradio_app():
         
         upload_btn.click(process_images, inputs=[image_input, name_input], outputs=[processed_image_display, name_list_display])
         text_process_btn.click(process_text, inputs=[text_input], outputs=processed_text_output)
-        generate_images_btn.click(load_model_and_generate_images, inputs=[processed_text_output], outputs=final_images_display)
+        generate_images_btn.click(load_model_and_generate_images, inputs=[processed_text_output, style_dropdown], outputs=final_images_display)
         
     demo.launch(share=True)
 

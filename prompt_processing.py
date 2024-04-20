@@ -32,7 +32,7 @@ The prompt should follow the following rules:\n
     print(response)
     return response
 
-def prompts_parse(prompts_text, metadata):
+def prompts_parse(prompts_text, metadata, style):
     # Replace names with signal words before extracting prompts
     for name, data in metadata.items():
         signal_word = data.get('signal_word', '')
@@ -40,7 +40,7 @@ def prompts_parse(prompts_text, metadata):
     
     # Extract prompts and append " animated, high res" to each
     # prompts = ["A photo of " + prompt + ", animated, high resolution" for prompt in re.findall(r'"(.*?)"', prompts_text)]
-    prompts = ["a Picture of " + prompt + "delicate, ultra detailed, illustration, comic style" for prompt in re.findall(r'"(.*?)"', prompts_text)]
+    prompts = ["a Picture of " + prompt + "delicate, ultra detailed, illustration, " + style for prompt in re.findall(r'"(.*?)"', prompts_text)]
 
     return prompts
     
