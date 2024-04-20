@@ -113,7 +113,8 @@ def gradio_app():
                 final_images_display = gr.Gallery(label="Final Images")
                 generate_images_btn = gr.Button("Generate Comics")
                 
-        def add_pretrained_image(image_path, name):
+        def add_pretrained_image(data):
+            image_path, name = data
             processed_image_path = image_path
             os.makedirs("runtime/face_embeddings", exist_ok=True)
             pt_file_path = f"runtime/face_embeddings/{name.replace(' ', '_')}.pt"
@@ -128,7 +129,7 @@ def gradio_app():
             processed_image_display.update(processed_image_names)
             name_list_display.update("\n".join(name_list))
         
-        pretrained_dataset.click(add_pretrained_image, inputs=[pretrained_dataset.components[0], pretrained_dataset.components[1]],
+        pretrained_dataset.click(add_pretrained_image, inputs=pretrained_dataset,
                                  outputs=[processed_image_display, name_list_display])
         upload_btn.click(process_images, inputs=[image_input, name_input], outputs=[processed_image_display, name_list_display])
         text_process_btn.click(process_text, inputs=[text_input], outputs=processed_text_output)
