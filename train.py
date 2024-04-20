@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from diffusers import DPMSolverMultistepScheduler
+from diffusers.optimization import get_scheduler
 from dataset import FaceDataset
 from model import IDPreservedGenerativeModel
 from torch.optim import Adam
@@ -9,12 +10,14 @@ from tqdm import tqdm
 from torch.cuda.amp import autocast, GradScaler
 from transformers import ViTImageProcessor, ViTModel
 from PIL import Image
+from util import add_noise_return_paras
+import types
 import os
 
 DTYPE = torch.float16
-MAX_TRAINING_STEP = 501
+MAX_TRAINING_STEP = 5001
 
-def train_model(model, data_loader, preprocessed_image, save_path, device, num_epochs=1, learning_rate=5e-5):
+def train_model(model, data_loader, preprocessed_image, save_path, device, num_epochs=5, learning_rate=5e-5):
     """
     Trains the IDPreservedGenerativeModel model.
 
@@ -26,7 +29,33 @@ def train_model(model, data_loader, preprocessed_image, save_path, device, num_e
     - learning_rate: Learning rate for the optimizer.
     """
     model = model.to(device)
-    optimizer = Adam(model.face_projection_layer.parameters(), lr=learning_rate)
+
+    learning_rate = 5e-5
+    adam_weight_decay = 1e-2
+    adam_epsilon = 1e-08
+    lr_scheduler = "constant"
+    gradient_accumulation_steps = 1
+    max_train_steps = MAX_TRAINING_STEP
+    lr_num_cycles = 1
+    lr_power = 1.0
+    
+    optimizer_projection = torch.optim.AdamW(
+        model.face_projection_layer.parameters(),
+        lr=learning_rate,
+        betas=(0.9, 0.999),
+        weight_decay=adam_weight_decay,
+        eps=adam_epsilon,
+    )
+
+    lr_scheduler_proj = get_scheduler(
+        lr_scheduler,
+        optimizer=optimizer_projection,
+        num_warmup_steps=0,
+        num_training_steps=max_train_steps * gradient_accumulation_steps,
+        num_cycles=lr_num_cycles,
+        power=lr_power,
+    )
+    # optimizer = Adam(model.face_projection_layer.parameters(), lr=learning_rate)
     scaler = GradScaler()
     global_step = 0
     print("Start Training...")
@@ -47,7 +76,7 @@ def train_model(model, data_loader, preprocessed_image, save_path, device, num_e
             pixel_values = batch["face_img"].to(device, dtype = DTYPE)
             prompt = batch['text']
     
-            optimizer.zero_grad()
+            optimizer_projection.zero_grad()
             # Forward pass with mixed precision
             with autocast():
                 model_pred, loss = model(
@@ -62,21 +91,16 @@ def train_model(model, data_loader, preprocessed_image, save_path, device, num_e
             # print(loss.item())
             # Backward pass and optimize
             scaler.scale(loss).backward()  # Scale the loss before the backward pass
-            scaler.step(optimizer)  # Adjust the optimizer's step
+            scaler.step(optimizer_projection)  # Adjust the optimizer's step
             scaler.update()  # Update the scale for next iteration
-
-            # Check for NaN gradients and parameters after optimizer step
-            # for name, param in model.face_projection_layer.named_parameters():
-            #     if torch.isnan(param.data).any():
-            #         print(f"NaN values detected in {name} parameters after optimizer step")
-            #     if param.grad is not None and torch.isnan(param.grad).any():
-            #         print(f"NaN gradients detected in {name} after optimizer step")
+            lr_scheduler_proj.step()  # Step the learning rate scheduler
 
             total_loss += loss.item()
 
-            if global_step == MAX_TRAINING_STEP:
-                model.save(preprocessed_image, save_path)
-
+            if global_step == max_train_steps:
+                avg_loss = total_loss / (max_train_steps-epoch*len(data_loader))
+                model.save(save_path)
+        model.save(f"test/00001_{epoch}.pt")
         avg_loss = total_loss / len(data_loader)
         print(f"Epoch [{epoch+1}/{num_epochs}], Average Loss: {avg_loss:.4f}")
         
@@ -95,7 +119,9 @@ def train_image(img_path, pt_file_path):
     print("Loading Pretrained Model...")
     model = IDPreservedGenerativeModel.from_pretrained("stabilityai/stable-diffusion-2-1",torch_dtype=torch.float32)
     model.scheduler = DPMSolverMultistepScheduler.from_config(model.scheduler.config)
-    model.load_adaptor(device=device)
+    model.scheduler.add_noise = types.MethodType(add_noise_return_paras, model.scheduler)
+    model.load_adaptor(device=device, face_image_embedding = original_img_vit_cls_output)
+    # model.scheduler = DPMSolverMultistepScheduler.from_config(model.scheduler.config)
     
     # Call the training function
     train_model(model, data_loader, original_img_vit_cls_output, pt_file_path, device)
@@ -103,8 +129,9 @@ def train_image(img_path, pt_file_path):
     
 if __name__ == "__main__":
     ## test image
-    face_img_path = '00001.png'  # replace it with real path 
-    pt_file_path = 'test_result/00001.pt'
+    face_img_path = 'test/00001.png'  # replace it with real path 
+    pt_file_path = 'test/00001.pt'
+    train_image(face_img_path, pt_file_path)
     
 
 
