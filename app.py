@@ -100,9 +100,6 @@ def gradio_app():
                 #                                 samples=pretrained_images,
                 #                                 label="Pre-trained Images (Click to Add)")
                 
-                # A dropdown menu
-                style_options = ["comic style", "4k", "Van Gogh", "oil painting", "vivid colors"]
-                style_dropdown = gr.Dropdown(choices=style_options, label="Select a style")
                 
             with gr.Column():
                 processed_image_display = gr.Gallery(label="Uploaded Images with Trained Face Embeddings")
@@ -110,6 +107,11 @@ def gradio_app():
                 text_input = gr.Textbox(label="Enter Story Prompt Using the Names Uploaded", placeholder="John Doe and Jane Smith went on a picnic.")
                 processed_text_output = gr.Textbox(label="LLM Processed Story, Please Revise Based on Your Preference", interactive=True)
                 text_process_btn = gr.Button("Process Text")
+                
+                # A dropdown menu
+                style_options = ["comic style", "4k", "Van Gogh", "oil painting", "vivid colors"]
+                style_dropdown = gr.Dropdown(choices=style_options, label="Select a style")
+                
                 final_images_display = gr.Gallery(label="Final Images")
                 generate_images_btn = gr.Button("Generate Comics")
                 
@@ -129,7 +131,7 @@ def gradio_app():
             processed_image_display.update(processed_image_names)
             name_list_display.update("\n".join(name_list))
         
-        pretrained_dataset.click(add_pretrained_image, inputs=pretrained_dataset,
+        pretrained_dataset.click(add_pretrained_image, inputs=pretrained_dataset.components,
                                  outputs=[processed_image_display, name_list_display])
         upload_btn.click(process_images, inputs=[image_input, name_input], outputs=[processed_image_display, name_list_display])
         text_process_btn.click(process_text, inputs=[text_input], outputs=processed_text_output)
