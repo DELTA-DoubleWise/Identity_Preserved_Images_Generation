@@ -180,7 +180,7 @@ class FaceDataset(Dataset):
         return item
     
     def get_vit_cls_output(self):
-        face_img = self.face_img
+        face_img, _, _ = self.transformation(self.face_img, self.face_mask, self.hair_mask)
         vit_input = self.vit_face_recog_processor(images=face_img, return_tensors="pt")["pixel_values"][0]
         vit_input = vit_input.to(self.device)
         vit_cls_output = self.vit_face_recognition_model(vit_input.unsqueeze(0).to(self.device)).last_hidden_state[:, 0]
