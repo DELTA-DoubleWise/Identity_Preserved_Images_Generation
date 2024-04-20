@@ -83,7 +83,16 @@ def gradio_app():
                 name_input = gr.Textbox(label="Enter Names (name must be of the format 'FirstName LastName') in the order of the uploaded images", placeholder="John Doe, Jane Smith")
                 upload_btn = gr.Button("Upload")
                 
-                # Add a dropdown menu
+                # A gr.Dataset component for pre-trained images
+                pretrained_images = [("pretrained_images/image1.jpg", "John Doe"),
+                                     ("pretrained_images/image2.jpg", "Jane Smith"),
+                                     # Add more pre-trained images and names
+                                    ]
+                pretrained_dataset = gr.Dataset(components=[gr.Image(), gr.Text()], 
+                                                samples=pretrained_images,
+                                                label="Pre-trained Images (Click to Add)")
+                
+                # A dropdown menu
                 style_options = ["comic style", "4k", "Van Gogh", "oil painting", "vivid colors"]
                 style_dropdown = gr.Dropdown(choices=style_options, label="Select a style")
                 
@@ -96,11 +105,23 @@ def gradio_app():
                 final_images_display = gr.Gallery(label="Final Images")
                 generate_images_btn = gr.Button("Generate Comics")
                 
+        def add_pretrained_image(image_path, name):
+            processed_image_path = image_path
+            os.makedirs("runtime/face_embeddings", exist_ok=True)
+            pt_file_path = f"runtime/face_embeddings/{name.replace(' ', '_')}.pt"
+            train_img_to_embedding(abs_path(processed_image_path), abs_path(pt_file_path))
+            pt_paths.append(pt_file_path)
+            name_list.append(name)
+            processed_image_display.update((processed_image_path, name))
+            name_list_display.update(", ".join(name_list))
+
         # Define interactions
         def update_gallery_and_names(processed_image_names, name_list):
             processed_image_display.update(processed_image_names)
             name_list_display.update("\n".join(name_list))
         
+        pretrained_dataset.click(add_pretrained_image, inputs=[pretrained_dataset.components[0], pretrained_dataset.components[1]],
+                                 outputs=[processed_image_display, name_list_display])
         upload_btn.click(process_images, inputs=[image_input, name_input], outputs=[processed_image_display, name_list_display])
         text_process_btn.click(process_text, inputs=[text_input], outputs=processed_text_output)
         generate_images_btn.click(load_model_and_generate_images, inputs=[processed_text_output, style_dropdown], outputs=final_images_display)
