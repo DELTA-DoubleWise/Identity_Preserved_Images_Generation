@@ -84,10 +84,15 @@ def gradio_app():
                 upload_btn = gr.Button("Upload")
                 
                 # A gr.Dataset component for pre-trained images
-                pretrained_images = [["pretrained_images/Taylor_Swift.png", "Taylor Swift"],
-                     ["pretrained_images/Jane_Smith.png", "Jane Smith"],
+                global pretrained_images_dict
+                pretrained_images_dict = {'Taylor Swift':('pretrained_images/Taylor_Swift.png','pretrained_images/Taylor_Swift.pt'),
+                    'Jane Smith': ('pretrained_images/Jane_Smith.png','pretrained_images/Jane_Smith.pt')
                      # Add more pre-trained images and names
-                    ]
+                    }
+                pretrained_images = [["pretrained_images/Taylor_Swift.png","Taylor Swift"], 
+                    ["pretrained_images/Jane_Smith.png", "Jane Smith"]
+                     # Add more pre-trained images and names
+                ]    
                 pretrained_dataset = gr.Dataset(components=[gr.Image(type="filepath"), gr.Text()], 
                                 samples=pretrained_images,
                                 label="Pre-trained Images (Click to Add)")
@@ -115,23 +120,34 @@ def gradio_app():
                 final_images_display = gr.Gallery(label="Final Images")
                 generate_images_btn = gr.Button("Generate Comics")
                 
-        def add_pretrained_image(data):
-            image_path, name = data
-            processed_image_path = image_path
-            os.makedirs("runtime/face_embeddings", exist_ok=True)
-            pt_file_path = f"runtime/face_embeddings/{name.replace(' ', '_')}.pt"
-            train_img_to_embedding(abs_path(processed_image_path), abs_path(pt_file_path))
-            pt_paths.append(pt_file_path)
-            name_list.append(name)
-            processed_image_display.update((processed_image_path, name))
-            name_list_display.update(", ".join(name_list))
+        def add_pretrained_image(clicked_event):
+            # print(image_path,type(image_path))
+            name = clicked_event[1]
+
+            pretrained_image_path, pretrained_pt_path = pretrained_images_dict[name]
+            # os.makedirs("runtime/face_embeddings", exist_ok=True)
+            # pt_file_path = f"runtime/face_embeddings/{name.replace(' ', '_')}.pt"
+            # train_img_to_embedding(abs_path(processed_image_path), abs_path(pt_file_path))
+            name_list.append(name.strip())  # Store names
+            pt_paths.append(pretrained_pt_path)
+            # processed_image_display.value = 
+            # name_list_display.value = ", ".join(name_list)
+            
+            return (processed_image_display.value + [(pretrained_image_path, name)]), ", ".join(name_list)
+
+            # processed_image_display.value = .append(pretrained_image_path)  # Store processed image path
+            # pt_paths.append(pretrained_pt_path)
+            
+            # name_list.append(name)
+            # processed_image_display.update((pretrained_image_path, name))
+            # name_list_display.update(", ".join(name_list))
 
         # Define interactions
         def update_gallery_and_names(processed_image_names, name_list):
             processed_image_display.update(processed_image_names)
             name_list_display.update("\n".join(name_list))
         
-        pretrained_dataset.click(add_pretrained_image, inputs=pretrained_dataset.components,
+        pretrained_dataset.click(add_pretrained_image, inputs=[pretrained_dataset],
                                  outputs=[processed_image_display, name_list_display])
         upload_btn.click(process_images, inputs=[image_input, name_input], outputs=[processed_image_display, name_list_display])
         text_process_btn.click(process_text, inputs=[text_input], outputs=processed_text_output)
