@@ -16,6 +16,9 @@ pipe = StableDiffusionPipeline.from_pretrained(model_path)
 # pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", torch_dtype=torch.float16, use_safetensors=True, variant="fp16")
 pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 pipe = pipe.to(device)
+# global display_images    
+display_images = []
+
 
 def abs_path(rel_path):
     dir_path = os.path.dirname(os.path.realpath(__file__))  # Get the directory of the script
@@ -24,7 +27,6 @@ def abs_path(rel_path):
 
 
 def process_images(image_files, names):
-    display_images = []
     global pt_paths
     global name_list
     pt_paths = []
@@ -95,26 +97,10 @@ def gradio_app():
                 ]    
 
                 # # Display each pre-trained image with a clickable functionality
-                # for img in pretrained_images:
-                #     img_component = gr.Image(value=img[0], interactive=True, elem_id=img[1]).style(clickable=True)
-                #     img_component.click(add_pretrained_image, inputs=[img_component, img[1]],
-                #                         outputs=[processed_image_display, name_list_display])
-                pretrained_dataset = gr.Dataset(components=[gr.Image(type="filepath"), gr.Text()], 
+                pretrained_dataset = gr.Dataset(components=[gr.Image(type="filepath", visible = False), gr.Text(visible = False)], 
                                 samples=pretrained_images,
                                 label="Pre-trained Images (Click to Add)"
                 )
-                
-                # gr.Dataset(#components=[gr.Image(type="filepath", label=name) for _,name in pretrained_images]
-                #                 samples= pretrained_images, #[[path] for path, _ in pretrained_images],
-                #                 label="Pre-trained Images (Click to Add)")
-                
-                # pretrained_images = [("pretrained_images/image1.jpg", "John Doe"),
-                #                      ("pretrained_images/image2.jpg", "Jane Smith"),
-                #                      # Add more pre-trained images and names
-                #                     ]
-                # pretrained_dataset = gr.Dataset(components=[gr.Image(), gr.Text()], 
-                #                                 samples=pretrained_images,
-                #                                 label="Pre-trained Images (Click to Add)")
                 
                 
             with gr.Column():
@@ -125,33 +111,35 @@ def gradio_app():
                 text_process_btn = gr.Button("Process Text")
                 
                 # A dropdown menu
-                style_options = ["comic style", "4k", "Van Gogh", "oil painting", "vivid colors"]
-                style_dropdown = gr.Dropdown(choices=style_options, label="Select a style")
+                # style_options = ["photorealistic", "digitally enhanced", "high contrast", "chiaroscuro lighting technique", 
+                #                  "intimate", "close-up", "detailed", "expressive", "highly detailed", "high resolution",
+                #                  "8k", "dramatic", "cinematic", "smooth light", "surreal", "dreamy", "cyberpunk", "close-up", 
+                #                  "vector", "cartoon", "comic style", "4k", "Van Gogh", "oil painting", "vivid colors", "2d minimalistic", "pixel-art", "low-res",
+                #                  "disney style", "watercolor painting", "clipart style", "studio ghibli style", "psychedelic style", "vaporwave style", "minimalistic",
+                #                  "fantasy art", "wide shot", "medium shot"
+                #                  ]
+                style_options = ["2d minimalistic", "4k", "8k", "cartoon", "chiaroscuro lighting technique", "cinematic", 
+                                "clipart style", "close-up", "comic style", "cyberpunk", "detailed", "digitally enhanced", 
+                                "disney style", "dramatic", "dreamy", "expressive", "fantasy art", "high contrast", "high resolution", 
+                                "highly detailed", "intimate", "low-res", "medium shot", "minimalistic", "oil painting", "photorealistic", 
+                                "pixel-art", "psychedelic style", "smooth light", "studio ghibli style", "surreal", "Van Gogh", 
+                                "vaporwave style", "vector", "vivid colors", "watercolor painting", "wide shot"]
+
+                style_dropdown = gr.Dropdown(choices=style_options, label="Add styles to prompts", multiselect=True)
                 
                 final_images_display = gr.Gallery(label="Final Images")
                 generate_images_btn = gr.Button("Generate Comics")
                 
         def add_pretrained_image(clicked_event):
-            # print(image_path,type(image_path))
             name = clicked_event[1]
 
             pretrained_image_path, pretrained_pt_path = pretrained_images_dict[name]
-            # os.makedirs("runtime/face_embeddings", exist_ok=True)
-            # pt_file_path = f"runtime/face_embeddings/{name.replace(' ', '_')}.pt"
-            # train_img_to_embedding(abs_path(processed_image_path), abs_path(pt_file_path))
+            display_images.append(pretrained_image_path)  # Store processed image path
             name_list.append(name.strip())  # Store names
             pt_paths.append(pretrained_pt_path)
-            # processed_image_display.value = 
-            # name_list_display.value = ", ".join(name_list)
-            
-            return (processed_image_display.value + [(pretrained_image_path, name)]), ", ".join(name_list)
+            # return [(img, name) for img, name in zip(display_images, name_list)], ", ".join(name_list)
 
-            # processed_image_display.value = .append(pretrained_image_path)  # Store processed image path
-            # pt_paths.append(pretrained_pt_path)
-            
-            # name_list.append(name)
-            # processed_image_display.update((pretrained_image_path, name))
-            # name_list_display.update(", ".join(name_list))
+            return [(img, name) for img, name in zip(display_images, name_list)], ", ".join(name_list)
 
         # Define interactions
         def update_gallery_and_names(processed_image_names, name_list):
