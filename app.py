@@ -93,9 +93,20 @@ def gradio_app():
                     ["pretrained_images/Jane_Smith.png", "Jane Smith"]
                      # Add more pre-trained images and names
                 ]    
+
+                # # Display each pre-trained image with a clickable functionality
+                # for img in pretrained_images:
+                #     img_component = gr.Image(value=img[0], interactive=True, elem_id=img[1]).style(clickable=True)
+                #     img_component.click(add_pretrained_image, inputs=[img_component, img[1]],
+                #                         outputs=[processed_image_display, name_list_display])
                 pretrained_dataset = gr.Dataset(components=[gr.Image(type="filepath"), gr.Text()], 
                                 samples=pretrained_images,
-                                label="Pre-trained Images (Click to Add)")
+                                label="Pre-trained Images (Click to Add)"
+                )
+                
+                # gr.Dataset(#components=[gr.Image(type="filepath", label=name) for _,name in pretrained_images]
+                #                 samples= pretrained_images, #[[path] for path, _ in pretrained_images],
+                #                 label="Pre-trained Images (Click to Add)")
                 
                 # pretrained_images = [("pretrained_images/image1.jpg", "John Doe"),
                 #                      ("pretrained_images/image2.jpg", "Jane Smith"),
