@@ -6,6 +6,7 @@ from StableIdentity_model.train import train_img_to_embedding
 import re
 import os
 
+selected_keywords = []
 pt_paths = []
 name_list = []
 meta_data = {}
@@ -15,6 +16,9 @@ pipe = StableDiffusionPipeline.from_pretrained(model_path)
 # pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", torch_dtype=torch.float16, use_safetensors=True, variant="fp16")
 pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 pipe = pipe.to(device)
+# global display_images    
+display_images = []
+
 
 def abs_path(rel_path):
     dir_path = os.path.dirname(os.path.realpath(__file__))  # Get the directory of the script
@@ -23,7 +27,6 @@ def abs_path(rel_path):
 
 
 def process_images(image_files, names):
-    display_images = []
     global pt_paths
     global name_list
     pt_paths = []
@@ -32,9 +35,10 @@ def process_images(image_files, names):
         # Here you would process your image and generate a .pt file
         first_name, last_name = name.strip().split(" ")  # Split first and last name
         image = image_tuple[0]
-        
+        os.makedirs("runtime/img", exist_ok=True)
         processed_image_path = os.path.join("runtime/img",f"{first_name}_{last_name}.png")  # Placeholder for image saving path
         image.save(processed_image_path, 'PNG')
+        os.makedirs("runtime/face_embeddings", exist_ok=True)
         pt_file_path = os.path.join("runtime/face_embeddings",f"{first_name}_{last_name}.pt")  # Placeholder for .pt file path
 
         train_img_to_embedding(abs_path(processed_image_path), abs_path(pt_file_path))
@@ -52,10 +56,10 @@ def process_text(input_text):
     processed_text = story_to_prompts(input_text, meta_data)
     return processed_text
 
-def load_model_and_generate_images(processed_text):
+def load_model_and_generate_images(processed_text, style_dropdown):
     processed_text_list = [prompt for prompt in re.findall(r'"(.*?)"', processed_text)]
     global pt_paths
-    prompts = prompts_parse(processed_text, meta_data)
+    prompts = prompts_parse(processed_text, meta_data, style_dropdown)
     test_embeddings = [torch.load(pt_path).to(device) for pt_path in pt_paths]
     token_embeddings = [item for test_embedding in test_embeddings for item in (test_embedding[:, 0], test_embedding[:, 1])]
     tokens = [f"*v{i+1}" for i in range(len(token_embeddings))]
@@ -80,26 +84,74 @@ def gradio_app():
                 image_input = gr.Gallery(label="Upload Images", type="image", show_label=False)
                 name_input = gr.Textbox(label="Enter Names (name must be of the format 'FirstName LastName') in the order of the uploaded images", placeholder="John Doe, Jane Smith")
                 upload_btn = gr.Button("Upload")
+                
+                # A gr.Dataset component for pre-trained images
+                global pretrained_images_dict
+                pretrained_images_dict = {'Taylor Swift':('pretrained_images/Taylor_Swift.png','pretrained_images/Taylor_Swift.pt'),
+                    'Jane Smith': ('pretrained_images/Jane_Smith.png','pretrained_images/Jane_Smith.pt')
+                     # Add more pre-trained images and names
+                    }
+                pretrained_images = [["pretrained_images/Taylor_Swift.png","Taylor Swift"], 
+                    ["pretrained_images/Jane_Smith.png", "Jane Smith"]
+                     # Add more pre-trained images and names
+                ]    
+
+                # # Display each pre-trained image with a clickable functionality
+                pretrained_dataset = gr.Dataset(components=[gr.Image(type="filepath", visible = False), gr.Text(visible = False)], 
+                                samples=pretrained_images,
+                                label="Pre-trained Images (Click to Add)"
+                )
+                
+                
             with gr.Column():
                 processed_image_display = gr.Gallery(label="Uploaded Images with Trained Face Embeddings")
                 name_list_display = gr.Label(label="Names of Uploaded Images")
+                text_input = gr.Textbox(label="Enter Story Prompt Using the Names Uploaded", placeholder="John Doe and Jane Smith went on a picnic.")
+                processed_text_output = gr.Textbox(label="LLM Processed Story, Please Revise Based on Your Preference", interactive=True)
+                text_process_btn = gr.Button("Process Text")
+                
+                # A dropdown menu
+                # style_options = ["photorealistic", "digitally enhanced", "high contrast", "chiaroscuro lighting technique", 
+                #                  "intimate", "close-up", "detailed", "expressive", "highly detailed", "high resolution",
+                #                  "8k", "dramatic", "cinematic", "smooth light", "surreal", "dreamy", "cyberpunk", "close-up", 
+                #                  "vector", "cartoon", "comic style", "4k", "Van Gogh", "oil painting", "vivid colors", "2d minimalistic", "pixel-art", "low-res",
+                #                  "disney style", "watercolor painting", "clipart style", "studio ghibli style", "psychedelic style", "vaporwave style", "minimalistic",
+                #                  "fantasy art", "wide shot", "medium shot"
+                #                  ]
+                style_options = ["2d minimalistic", "4k", "8k", "cartoon", "chiaroscuro lighting technique", "cinematic", 
+                                "clipart style", "close-up", "comic style", "cyberpunk", "detailed", "digitally enhanced", 
+                                "disney style", "dramatic", "dreamy", "expressive", "fantasy art", "high contrast", "high resolution", 
+                                "highly detailed", "intimate", "low-res", "medium shot", "minimalistic", "oil painting", "photorealistic", 
+                                "pixel-art", "psychedelic style", "smooth light", "studio ghibli style", "surreal", "Van Gogh", 
+                                "vaporwave style", "vector", "vivid colors", "watercolor painting", "wide shot"]
 
-        text_input = gr.Textbox(label="Enter Stroy Prompt Using the Names Uploaded", placeholder="John Doe and Jane Smith went on a picnic.")
-        processed_text_output = gr.Textbox(label="LLM Processed Story, Please Revise Based on Your Preference", interactive=True)
-        text_process_btn = gr.Button("Process Text")
+                style_dropdown = gr.Dropdown(choices=style_options, label="Add styles to prompts", multiselect=True)
+                
+                final_images_display = gr.Gallery(label="Final Images")
+                generate_images_btn = gr.Button("Generate Comics")
+                
+        def add_pretrained_image(clicked_event):
+            name = clicked_event[1]
 
-        final_images_display = gr.Gallery(label="Final Images")
-        generate_images_btn = gr.Button("Generate Comics")
+            pretrained_image_path, pretrained_pt_path = pretrained_images_dict[name]
+            display_images.append(pretrained_image_path)  # Store processed image path
+            name_list.append(name.strip())  # Store names
+            pt_paths.append(pretrained_pt_path)
+            # return [(img, name) for img, name in zip(display_images, name_list)], ", ".join(name_list)
+
+            return [(img, name) for img, name in zip(display_images, name_list)], ", ".join(name_list)
 
         # Define interactions
         def update_gallery_and_names(processed_image_names, name_list):
             processed_image_display.update(processed_image_names)
             name_list_display.update("\n".join(name_list))
-
+        
+        pretrained_dataset.click(add_pretrained_image, inputs=[pretrained_dataset],
+                                 outputs=[processed_image_display, name_list_display])
         upload_btn.click(process_images, inputs=[image_input, name_input], outputs=[processed_image_display, name_list_display])
         text_process_btn.click(process_text, inputs=[text_input], outputs=processed_text_output)
-        generate_images_btn.click(load_model_and_generate_images, inputs=[processed_text_output], outputs=final_images_display)
-
+        generate_images_btn.click(load_model_and_generate_images, inputs=[processed_text_output, style_dropdown], outputs=final_images_display)
+        
     demo.launch(share=True)
 
 
