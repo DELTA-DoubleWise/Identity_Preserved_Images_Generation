@@ -233,3 +233,37 @@ def get_rep_pos(tokenized: torch.Tensor, rep_tokens: list):
     for token in rep_tokens:
         pos_list = torch.stack(torch.where(tokenized == token)).T.tolist()
     return pos_list
+
+def add_noise_return_paras(
+    self,
+    original_samples: torch.FloatTensor,
+    noise: torch.FloatTensor,
+    timesteps: torch.IntTensor,
+) -> torch.FloatTensor:
+    # Make sure alphas_cumprod and timestep have same device and dtype as original_samples
+    alphas_cumprod = self.alphas_cumprod.to(device=original_samples.device, dtype=original_samples.dtype)
+    timesteps = timesteps.to(original_samples.device)
+
+    sqrt_alpha_prod = alphas_cumprod[timesteps] ** 0.5
+    sqrt_alpha_prod = sqrt_alpha_prod.flatten()
+    while len(sqrt_alpha_prod.shape) < len(original_samples.shape):
+        sqrt_alpha_prod = sqrt_alpha_prod.unsqueeze(-1)
+
+    sqrt_one_minus_alpha_prod = (1 - alphas_cumprod[timesteps]) ** 0.5
+    sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.flatten()
+    while len(sqrt_one_minus_alpha_prod.shape) < len(original_samples.shape):
+        sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
+
+    noisy_samples = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise
+    return noisy_samples, sqrt_alpha_prod, sqrt_one_minus_alpha_prod
+
+def weights_init_normal(m):
+    classname = m.__class__.__name__
+    if classname.find("Linear") != -1:  
+        torch.nn.init.normal_(m.weight.data, 0.0, 0.02)
+        torch.nn.init.constant_(m.bias.data, 0.0)
+
+def abs_path(rel_path):
+    dir_path = os.path.dirname(os.path.realpath(__file__))  # Get the directory of the script
+    abs_file_path = os.path.join(dir_path, rel_path)
+    return abs_file_path
