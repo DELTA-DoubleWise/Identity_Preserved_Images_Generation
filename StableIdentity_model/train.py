@@ -51,10 +51,10 @@ import numpy as np
 from omegaconf import OmegaConf
 import random
 from transformers import ViTModel
-from .models.celeb_embeddings import embedding_forward  
-from .models.embedding_manager import EmbeddingManagerId_adain
-from .datasets_face.face_id import FaceIdDataset
-from .utils import text_encoder_forward, set_requires_grad, latents_to_images, latents_to_images_tensor, add_noise_return_paras
+from StableIdentity_model.models.celeb_embeddings import embedding_forward  
+from StableIdentity_model.models.embedding_manager import EmbeddingManagerId_adain
+from StableIdentity_model.datasets_face.face_id import FaceIdDataset
+from StableIdentity_model.utils import text_encoder_forward, set_requires_grad, latents_to_images, latents_to_images_tensor, add_noise_return_paras
 import torch.nn as nn
 from torch import autograd
 import types
@@ -89,263 +89,6 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
         raise ValueError(f"{model_class} is not supported.")
 
 
-def parse_args(input_args=None):
-    parser = argparse.ArgumentParser(description="Simple example of a script for training Cones 2.")
-    parser.add_argument(
-        "--pretrained_model_name_or_path",
-        type=str,
-        default="/home/user/.cache/huggingface/hub/models--stabilityai--stable-diffusion-2-1/snapshots/5cae40e6a2745ae2b01ad92ae5043f95f23644d6",
-        help="Path to pretrained model or model identifier from huggingface.co/models.",
-    )    
-    parser.add_argument(
-        "--vit_face_recognition_model_path",
-        type=str,
-        default="/home/user/.cache/huggingface/hub/vit-base-patch16-224-in21k-face-recognition",
-        help=('config to load the train model and dataset'),
-    )         
-    parser.add_argument(
-        "--embedding_manager_config",
-        type=str,
-        default="datasets_face/identity_space.yaml",
-        help=('config to load the train model and dataset'),
-    )
-    parser.add_argument("--d_reg_every", type=int, default=16,
-                                help="interval for applying r1 regularization")    
-    parser.add_argument("--r1", type=float, default=1, help="weight of the r1 regularization")
-    parser.add_argument(
-        "--l_hair_diff_lambda",
-        type=float,
-        default=0,
-        help="Initial learning rate (after the potential warmup period) to use.",
-    )                        
-    parser.add_argument(
-        "--l_norm_lambda",
-        type=float,
-        default=0,
-        help="Initial learning rate (after the potential warmup period) to use.",
-    )           
-    parser.add_argument(
-        "--pretrained_embedding_manager_path",
-        type=str,
-        default=None,          
-        help="pretrained_embedding_manager_path",
-    )
-    parser.add_argument(
-        "--pretrained_embedding_manager_epoch",
-        type=str,
-        default=500,
-        help="pretrained_embedding_manager_epoch",
-    )                
-    parser.add_argument(
-        "--revision",
-        type=str,
-        default=None,
-        required=False,
-        help=(
-            "Revision of pretrained model identifier from huggingface.co/models. Trainable model components should be"
-            " float32 precision."
-        ),
-    )
-    parser.add_argument(
-        "--tokenizer_name",
-        type=str,
-        default=None,
-        help="Pretrained tokenizer name or path if not the same as model_name",
-    )
-    parser.add_argument(
-        "--face_img_path",
-        type=str,
-        default=None,
-        required=True,
-        help="A folder containing the training data.",
-    )
-    parser.add_argument(
-        "--output_dir",
-        type=str,
-        default="cones2-model",
-        help="The output directory where the model predictions and checkpoints will be written.",
-    )
-    parser.add_argument("--seed", type=int, default=None, help="A seed for reproducible training.")
-    parser.add_argument(
-        "--resolution",
-        type=int,
-        default=512,
-        help=(
-            "The resolution for input images, all the images in the train/validation dataset will be resized to this"
-            " resolution"
-        ),
-    )
-    parser.add_argument(
-        "--center_crop",
-        default=False,
-        action="store_true",
-        help=(
-            "Whether to center crop the input images to the resolution. If not set, the images will be randomly"
-            " cropped. The images will be resized to the resolution first before cropping."
-        ),
-    )
-    parser.add_argument(
-        "--train_batch_size", type=int, default=1, help="Batch size (per device) for the training dataloader."
-    )
-    parser.add_argument(
-        "--sample_batch_size", type=int, default=4, help="Batch size (per device) for sampling images."
-    )
-    parser.add_argument("--num_train_epochs", type=int, default=5)
-    parser.add_argument(
-        "--max_train_steps",
-        type=int,
-        default=451,
-        help="Total number of training steps to perform.  If provided, overrides num_train_epochs.",
-    )
-    parser.add_argument(
-        "--checkpointing_steps",
-        type=int,
-        default=100,
-        help=(
-            "Save a checkpoint of the training state every X updates. Checkpoints can be used for resuming training via"
-            " `--resume_from_checkpoint`. In the case that the checkpoint is better than the final trained model, the"
-            " checkpoint can also be used for inference. Using a checkpoint for inference requires separate loading of"
-            " the original pipeline and the individual checkpointed model components."
-        ),
-    )
-    parser.add_argument(
-        "--checkpoints_total_limit",
-        type=int,
-        default=None,
-        help=(
-            "Max number of checkpoints to store. Passed as `total_limit` to the `Accelerator` `ProjectConfiguration`."
-        ),
-    )
-    parser.add_argument(
-        "--resume_from_checkpoint",
-        type=str,
-        default=None,
-        help=(
-            "Whether training should be resumed from a previous checkpoint. Use a path saved by"
-            ' `--checkpointing_steps`, or `"latest"` to automatically select the last available checkpoint.'
-        ),
-    )
-    parser.add_argument(
-        "--gradient_accumulation_steps",
-        type=int,
-        default=1,
-        help="Number of updates steps to accumulate before performing a backward/update pass.",
-    )
-    parser.add_argument(
-        "--gradient_checkpointing",
-        action="store_true",
-        help="Whether or not to use gradient checkpointing to save memory at the expense of slower backward pass.",
-    )
-    parser.add_argument(
-        "--learning_rate",
-        type=float,
-        default=5e-5,           
-        help="Initial learning rate (after the potential warmup period) to use.",
-    )
-    parser.add_argument(
-        "--scale_lr",
-        action="store_true",
-        default=True,
-        help="Scale the learning rate by the number of GPUs, gradient accumulation steps, and batch size.",
-    )
-    parser.add_argument(
-        "--lr_scheduler",
-        type=str,
-        default="constant",
-        help=(
-            'The scheduler type to use. Choose between ["linear", "cosine", "cosine_with_restarts", "polynomial",'
-            ' "constant", "constant_with_warmup"]'
-        ),
-    )
-    parser.add_argument(
-        "--lr_warmup_steps", type=int, default=0, help="Number of steps for the warmup in the lr scheduler."
-    )
-    parser.add_argument(
-        "--lr_num_cycles",
-        type=int,
-        default=1,
-        help="Number of hard resets of the lr in cosine_with_restarts scheduler.",
-    )
-    parser.add_argument("--lr_power", type=float, default=1.0, help="Power factor of the polynomial scheduler.")
-    parser.add_argument(
-        "--use_8bit_adam", action="store_true", help="Whether or not to use 8-bit Adam from bitsandbytes."
-    )
-    parser.add_argument(
-        "--dataloader_num_workers",
-        type=int,
-        default=2,
-        help=(
-            "Number of subprocesses to use for data loading. 0 means that the data will be loaded in the main process."
-        ),
-    )
-    parser.add_argument("--adam_beta1", type=float, default=0.9, help="The beta1 parameter for the Adam optimizer.")
-    parser.add_argument("--adam_beta2", type=float, default=0.999, help="The beta2 parameter for the Adam optimizer.")
-    parser.add_argument("--adam_weight_decay", type=float, default=1e-2, help="Weight decay to use.")
-    parser.add_argument("--adam_epsilon", type=float, default=1e-08, help="Epsilon value for the Adam optimizer")
-    parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
-    parser.add_argument(
-        "--logging_dir",
-        type=str,
-        default="logs",
-        help=(
-            "[TensorBoard](https://www.tensorflow.org/tensorboard) log directory. Will default to"
-            " *output_dir/runs/**CURRENT_DATETIME_HOSTNAME***."
-        ),
-    )
-    parser.add_argument(
-        "--allow_tf32",
-        action="store_true",
-        help=(
-            "Whether or not to allow TF32 on Ampere GPUs. Can be used to speed up training. For more information, see"
-            " https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices"
-        ),
-    )
-    parser.add_argument(
-        "--report_to",
-        type=str,
-        default="tensorboard",
-        help=(
-            'The integration to report the results and logs to. Supported platforms are `"tensorboard"`'
-            ' (default), `"wandb"` and `"comet_ml"`. Use `"all"` to report to all integrations.'
-        ),
-    )
-    parser.add_argument(
-        "--mixed_precision",
-        type=str,
-        default=None,
-        choices=["no", "fp16", "bf16"],
-        help=(
-            "Whether to use mixed precision. Choose between fp16 and bf16 (bfloat16). Bf16 requires PyTorch >="
-            " 1.10.and an Nvidia Ampere GPU.  Default to the value of accelerate config of the current system or the"
-            " flag passed with the `accelerate.launch` command. Use this argument to override the accelerate config."
-        ),
-    )
-    parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
-    parser.add_argument(
-        "--enable_xformers_memory_efficient_attention", action="store_true", help="Whether or not to use xformers."
-    )
-    parser.add_argument(
-        "--set_grads_to_none",
-        action="store_true",
-        help=(
-            "Save more memory by using setting grads to None instead of zero. Be aware, that this changes certain"
-            " behaviors, so disable this argument if it causes any problems. More info:"
-            " https://pytorch.org/docs/stable/generated/torch.optim.Optimizer.zero_grad.html"
-        ),
-    )
-
-    if input_args is not None:
-        args = parser.parse_args(input_args)
-    else:
-        args = parser.parse_args()
-
-    env_local_rank = int(os.environ.get("LOCAL_RANK", -1))
-    if env_local_rank != -1 and env_local_rank != args.local_rank:
-        args.local_rank = env_local_rank
-
-    return args
-
-
 def encode_prompt(prompt_batch, text_encoder, tokenizer, embedding_manager, is_train=True,
                   face_img_embeddings = None, timesteps = None):
     prompt_embeds_list = []
@@ -376,36 +119,6 @@ def encode_prompt(prompt_batch, text_encoder, tokenizer, embedding_manager, is_t
                                             face_img_embeddings = face_img_embeddings,
                                             timesteps = timesteps)
     return prompt_embeds
-
-
-
-
-def collate_fn(examples):
-    input_ids = [example["face_prompt_ids"] for example in examples]
-    pixel_values = [example["face_images"] for example in examples]
-
-    pixel_values = torch.stack(pixel_values)
-    pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
-
-    input_ids = torch.cat(input_ids, dim=0)
-
-    batch = {"input_ids": input_ids, "pixel_values": pixel_values}
-    return batch
-
-
-class PromptDataset(Dataset):
-    """A simple dataset to prepare the prompts to generate class images on multiple GPUs."""
-
-    def __init__(self, prompt, num_samples):
-        self.prompt = prompt
-        self.num_samples = num_samples
-
-    def __len__(self):
-        return self.num_samples
-
-    def __getitem__(self, index):
-        example = {"prompt": self.prompt, "index": index}
-        return example
     
     
 def weights_init_normal(m):
@@ -418,12 +131,8 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
 
     print(f"image path: {processed_image_path}")
     print(f"embedding saving path: {pt_file_path}")
-    
-    pt_directory = "/".join(pt_file_path.rsplit("/", 2)[:-1])
-    os.makedirs(pt_directory, exist_ok=True)
-    
     pretrained_model_name = "stabilityai/stable-diffusion-2-1-base"
-    vit_face_recognition_model_name = "google/vit-base-patch16-224-in21k"
+    vit_face_recognition_model_name = "jayanta/google-vit-base-patch16-224-face"
     embedding_manager_config_path = "StableIdentity_model/datasets_face/identity_space.yaml"
     accelerator = Accelerator()
 
@@ -509,7 +218,7 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
     adam_weight_decay = 1e-2
     adam_epsilon = 1e-08
     train_batch_size = 1
-    max_train_steps = 451
+    max_train_steps = 501
     num_train_epochs = 1
     lr_scheduler = "constant"
     lr_num_cycles = 1
@@ -579,8 +288,7 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
     vit_face_recog_processor = ViTImageProcessor.from_pretrained(vit_face_recognition_model_name)
     test_vit_input = vit_face_recog_processor(images=test_aligned_img, return_tensors="pt")["pixel_values"][0] 
     test_vit_cls_output = vit_face_recognition_model(test_vit_input.unsqueeze(0).to(vit_face_recognition_model.device, dtype = torch.float32)).last_hidden_state[:, 0]
-    img_name = os.path.basename(processed_image_path)[:-4]          
-
+    img_name = os.path.basename(processed_image_path)[:-4]    
 
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
@@ -619,6 +327,8 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
     trained_images_num = 0
     Embedding_Manager.train()
     for epoch in range(first_epoch, num_train_epochs):
+
+        total_loss = 0
         
         for step, batch in enumerate(train_dataloader):
             trained_images_num += total_batch_size
@@ -653,7 +363,6 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
                 # Add noise to the latents according to the noise magnitude at each timestep
                 # (this is the forward diffusion process)
                 noisy_latents, sqrt_alpha_prod, sqrt_one_minus_alpha_prod = noise_scheduler.add_noise(latents, noise, timesteps)
-                
 
                 # Predict the noise residual
                 model_pred = unet(noisy_latents.float(), timesteps, encoder_hidden_states.float()).sample
@@ -666,8 +375,6 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
                 else:
                     raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
-                
-                
                 
                 # masked two-phase loss
                 noise_indices = torch.where(timesteps > 600)[0]
@@ -695,10 +402,21 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
                     hair_loss_z0 = F.mse_loss(hair_mask[z0_indices] * pred_z0[z0_indices] / vae.config.scaling_factor, \
                         hair_mask[z0_indices] * latents[z0_indices] / vae.config.scaling_factor, reduction="mean")
                     pred_z0_loss = fg_loss_z0 + hair_loss_z0 * l_hair_diff_lambda
+                    # print(vae.config.scaling_factor)
+                    # print(pred_z0.max(), pred_z0.min(), pred_z0.mean(), pred_z0.std())
+                    # print(latents.max(), latents.min(), latents.mean(), latents.std())
                     
                 loss = noise_loss + pred_z0_loss
+
+                print(f"noise loss: {noise_loss}, pred z0 loss: {pred_z0_loss}")
+                # print(f"hair_loss_noise: {fg_loss_noise}, hair_loss_noise: {hair_loss_noise}")
+                # print(f"fg loss z0: {fg_loss_z0}, hair_loss_z0: {hair_loss_z0}")
                 
-       
+                # print(pred_z0.max(), pred_z0.min(), pred_z0.mean(), pred_z0.std())
+                # print(latents.max(), latents.min(), latents.mean(), latents.std())
+    
+                
+                total_loss += loss.item()
                 
                 
                 accelerator.backward(loss)
@@ -722,6 +440,9 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
                             Embedding_Manager.module.save(test_vit_cls_output, pt_file_path, None)
 
                         logger.info(f"Saved state to {pt_file_path}")
+                if global_step % 100 == 0 and global_step!=0:
+                    avg_loss = total_loss / (global_step - epoch*len(train_dataloader))
+                    print(f"Average Loss: {avg_loss:.4f}")
                 global_step += 1
 
             logs = {"imgs_num": trained_images_num, 
@@ -732,6 +453,8 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
             
             if global_step >= max_train_steps:
                 break
+        avg_loss = total_loss / len(train_dataloader)
+        print(f"Epoch [{epoch+1}], Average Loss: {avg_loss:.4f}")
 
     # Create the pipeline using the trained modules and save it.
     accelerator.wait_for_everyone()
