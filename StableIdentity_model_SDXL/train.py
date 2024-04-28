@@ -51,10 +51,10 @@ import numpy as np
 from omegaconf import OmegaConf
 import random
 from transformers import ViTModel
-from StableIdentity_model.models.celeb_embeddings import embedding_forward  
-from StableIdentity_model.models.embedding_manager import EmbeddingManagerId_adain
-from StableIdentity_model.datasets_face.face_id import FaceIdDataset
-from StableIdentity_model.utils import text_encoder_forward, set_requires_grad, latents_to_images, latents_to_images_tensor, add_noise_return_paras
+from StableIdentity_model_SDXL.models.celeb_embeddings import embedding_forward, embedding_forward_2
+from StableIdentity_model_SDXL.models.embedding_manager import EmbeddingManagerId_adain
+from StableIdentity_model_SDXL.datasets_face.face_id import FaceIdDataset
+from StableIdentity_model_SDXL.utils import text_encoder_forward, set_requires_grad, latents_to_images, latents_to_images_tensor, add_noise_return_paras
 import torch.nn as nn
 from torch import autograd
 import types
@@ -71,25 +71,58 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
         subfolder="text_encoder",
         revision=revision,
     )
-    model_class = text_encoder_config.architectures[0]
+    model_class_1 = text_encoder_config.architectures[0]
+    
+    text_encoder_2_config = PretrainedConfig.from_pretrained(
+        pretrained_model_name_or_path,
+        subfolder="text_encoder_2",
+        revision=revision,
+    )
+    model_class_2 = text_encoder_2_config.architectures[0]
 
-    if model_class == "CLIPTextModel":
+    class_1, class_2 = None, None
+    if model_class_1 == "CLIPTextModel":
         from transformers import CLIPTextModel
+        class_1 = CLIPTextModel
 
-        return CLIPTextModel
-    elif model_class == "RobertaSeriesModelWithTransformation":
+    elif model_class_1 == "RobertaSeriesModelWithTransformation":
         from diffusers.pipelines.alt_diffusion.modeling_roberta_series import RobertaSeriesModelWithTransformation
 
-        return RobertaSeriesModelWithTransformation
-    elif model_class == "T5EncoderModel":
+        class_1 = RobertaSeriesModelWithTransformation
+    elif model_class_1 == "T5EncoderModel":
         from transformers import T5EncoderModel
 
-        return T5EncoderModel
+        class_1 = T5EncoderModel
+    elif model_class_1 == "CLIPTextModelWithProjection":
+        from transformers import CLIPTextModelWithProjection
+        
+        class_1 = CLIPTextModelWithProjection
     else:
-        raise ValueError(f"{model_class} is not supported.")
+        raise ValueError(f"{model_class_1} is not supported.")
+    
+    if model_class_2 == "CLIPTextModel":
+        from transformers import CLIPTextModel
+        class_2 = CLIPTextModel
+
+    elif model_class_2 == "RobertaSeriesModelWithTransformation":
+        from diffusers.pipelines.alt_diffusion.modeling_roberta_series import RobertaSeriesModelWithTransformation
+
+        class_2 = RobertaSeriesModelWithTransformation
+    elif model_class_2 == "T5EncoderModel":
+        from transformers import T5EncoderModel
+
+        class_2 = T5EncoderModel
+    elif model_class_2 == "CLIPTextModelWithProjection":
+        from transformers import CLIPTextModelWithProjection
+        
+        class_2 = CLIPTextModelWithProjection
+    else:
+        raise ValueError(f"{model_class_2} is not supported.")
+        
+    return class_1, class_2
 
 
-def encode_prompt(prompt_batch, text_encoder, tokenizer, embedding_manager, is_train=True,
+def encode_prompt(prompt_batch, text_encoder, text_encoder_2, tokenizer, tokenizer_2, embedding_manager, is_train=True,
                   face_img_embeddings = None, timesteps = None):
     prompt_embeds_list = []
     captions = []
@@ -110,15 +143,35 @@ def encode_prompt(prompt_batch, text_encoder, tokenizer, embedding_manager, is_t
         truncation=True,
         return_tensors="pt",
     )
-    text_input_ids = text_inputs.input_ids.to(text_encoder.device)  
+    text_input_ids = text_inputs.input_ids.to(text_encoder.device)
+    
+    text_inputs_2 = tokenizer_2(
+        captions,
+        padding="max_length",
+        max_length=tokenizer_2.model_max_length,
+        truncation=True,
+        return_tensors="pt",
+    )
+    text_input_ids_2 = text_inputs_2.input_ids.to(text_encoder_2.device)
+    
+    
 
     prompt_embeds = text_encoder_forward(text_encoder = text_encoder, 
-                                            input_ids = text_input_ids,
+                                         input_ids = text_input_ids,
                                             output_hidden_states=True,
                                             embedding_manager = embedding_manager,
                                             face_img_embeddings = face_img_embeddings,
                                             timesteps = timesteps)
-    return prompt_embeds
+    
+    prompt_embeds_2 = text_encoder_forward(text_encoder = text_encoder_2,
+                                         input_ids = text_input_ids_2,
+                                            output_hidden_states=True,
+                                            embedding_manager = embedding_manager,
+                                            face_img_embeddings = face_img_embeddings,
+                                            timesteps = timesteps)
+    prompt_embeds_output = torch.concat([prompt_embeds,prompt_embeds_2], dim=-1)
+
+    return prompt_embeds_output
     
     
 def weights_init_normal(m):
@@ -127,13 +180,15 @@ def weights_init_normal(m):
         torch.nn.init.normal_(m.weight.data, 0.0, 0.02)
         torch.nn.init.constant_(m.bias.data, 0.0)
 
-def train_img_to_embedding(processed_image_path, pt_file_path):
+def train_img_to_embedding(processed_image_path, pt_file_path_1, pt_file_path_2):
 
     print(f"image path: {processed_image_path}")
-    print(f"embedding saving path: {pt_file_path}")
-    pretrained_model_name = "stabilityai/stable-diffusion-2-1-base"
-    vit_face_recognition_model_name = "jayanta/google-vit-base-patch16-224-face"
-    embedding_manager_config_path = "StableIdentity_model/datasets_face/identity_space.yaml"
+    print(f"embedding saving path 1: {pt_file_path_1}")
+    print(f"embedding saving path 2: {pt_file_path_2}")
+
+    pretrained_model_name = "stabilityai/stable-diffusion-xl-base-1.0"
+    vit_face_recognition_model_name = "google/vit-base-patch16-224-in21k"
+    embedding_manager_config_path = "StableIdentity_model_SDXL/datasets_face/identity_space.yaml"
     accelerator = Accelerator()
 
     # Make one log on every process with the configuration for debugging.
@@ -156,19 +211,32 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
             subfolder="tokenizer",
             use_fast=False,
         )
+
+    tokenizer_2 = AutoTokenizer.from_pretrained(
+            pretrained_model_name,
+            subfolder="tokenizer_2",
+            use_fast=False,
+        )
+
     # import correct text encoder class
-    text_encoder_cls = import_model_class_from_model_name_or_path(pretrained_model_name)
+    text_encoder_cls_1, text_encoder_cls_2 = import_model_class_from_model_name_or_path(pretrained_model_name)
 
     # Load scheduler and models
     noise_scheduler = DDPMScheduler.from_pretrained(pretrained_model_name, subfolder="scheduler")
+    # noise_scheduler = EulerDiscreteScheduler.from_pretrained(pretrained_model_name, subfolder="scheduler")
     noise_scheduler.add_noise = types.MethodType(add_noise_return_paras, noise_scheduler)
 
-    
-    text_encoder = text_encoder_cls.from_pretrained(
+    text_encoder = text_encoder_cls_1.from_pretrained(
         pretrained_model_name, subfolder="text_encoder"
     )
     
     text_encoder.text_model.embeddings.forward = embedding_forward.__get__(text_encoder.text_model.embeddings)
+    
+    text_encoder_2 = text_encoder_cls_2.from_pretrained(
+        pretrained_model_name, subfolder="text_encoder_2"
+    )
+    
+    text_encoder_2.text_model.embeddings.forward = embedding_forward_2.__get__(text_encoder_2.text_model.embeddings)
 
     # face recognition encoder 
     vit_face_recognition_model = ViTModel.from_pretrained(vit_face_recognition_model_name)  
@@ -177,7 +245,9 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
     embedding_manager_config = OmegaConf.load(embedding_manager_config_path)
     Embedding_Manager = EmbeddingManagerId_adain(
             tokenizer,
+            tokenizer_2,
             text_encoder,
+            text_encoder_2,
             device = accelerator.device,
             training = True,
             num_embeds_per_token = embedding_manager_config.model.personalization_config.params.num_embeds_per_token,            
@@ -186,6 +256,7 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
             vit_out_dim = embedding_manager_config.model.personalization_config.params.vit_out_dim,
     )
     Embedding_Manager.face_projection_layer.apply(weights_init_normal)
+    Embedding_Manager.face_projection_layer_2.apply(weights_init_normal)
 
     for param in Embedding_Manager.trainable_projection_parameters():
         param.requires_grad = True
@@ -198,6 +269,7 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
     vae.requires_grad_(False)
     unet.requires_grad_(False)
     text_encoder.requires_grad_(False)
+    text_encoder_2.requires_grad_(False)
 
     # Check that all trainable models are in full precision
     low_precision_error_string = (
@@ -214,7 +286,7 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
 
     optimizer_class = torch.optim.AdamW
     gradient_accumulation_steps = 1
-    learning_rate = 5e-5
+    learning_rate = 1e-5
     adam_weight_decay = 1e-2
     adam_epsilon = 1e-08
     train_batch_size = 1
@@ -278,8 +350,10 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
     # Move vae and unet to device and cast to weight_dtype
     vae.to(accelerator.device, dtype=weight_dtype)
     unet.to(accelerator.device, dtype=weight_dtype)
+    unet.config.addition_embed_type = "others"
     vit_face_recognition_model.to(accelerator.device, dtype=weight_dtype)
     text_encoder.to(accelerator.device, dtype=weight_dtype)
+    text_encoder_2.to(accelerator.device, dtype=weight_dtype)
     Embedding_Manager.to(accelerator.device, dtype=weight_dtype)
 
     # for test: target img without augmentation
@@ -290,6 +364,8 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
     test_vit_cls_output = vit_face_recognition_model(test_vit_input.unsqueeze(0).to(vit_face_recognition_model.device, dtype = torch.float32)).last_hidden_state[:, 0]
     img_name = os.path.basename(processed_image_path)[:-4]    
 
+    # torch.save(test_vit_cls_output, "img_embedding2.pt")
+    # print("saved")
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / gradient_accumulation_steps)
@@ -354,7 +430,7 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
                 
                 
                 # Get the text embedding for conditioning
-                encoder_hidden_states = encode_prompt(batch["caption"], text_encoder, tokenizer, 
+                encoder_hidden_states = encode_prompt(batch["caption"], text_encoder, text_encoder_2, tokenizer, tokenizer_2,
                                                         Embedding_Manager, is_train=True, 
                                                         face_img_embeddings = vit_cls_output, 
                                                         timesteps = timesteps)
@@ -377,8 +453,8 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
 
                 
                 # masked two-phase loss
-                noise_indices = torch.where(timesteps > 600)[0]
-                z0_indices = torch.where(timesteps <= 600)[0]
+                noise_indices = torch.where(timesteps > 500)[0]
+                z0_indices = torch.where(timesteps <= 500)[0]
                 
                 # if timesteps <= 600
                 if len(noise_indices) == 0:
@@ -402,19 +478,8 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
                     hair_loss_z0 = F.mse_loss(hair_mask[z0_indices] * pred_z0[z0_indices] / vae.config.scaling_factor, \
                         hair_mask[z0_indices] * latents[z0_indices] / vae.config.scaling_factor, reduction="mean")
                     pred_z0_loss = fg_loss_z0 + hair_loss_z0 * l_hair_diff_lambda
-                    # print(vae.config.scaling_factor)
-                    # print(pred_z0.max(), pred_z0.min(), pred_z0.mean(), pred_z0.std())
-                    # print(latents.max(), latents.min(), latents.mean(), latents.std())
                     
                 loss = noise_loss + pred_z0_loss
-
-                print(f"noise loss: {noise_loss}, pred z0 loss: {pred_z0_loss}")
-                # print(f"hair_loss_noise: {fg_loss_noise}, hair_loss_noise: {hair_loss_noise}")
-                # print(f"fg loss z0: {fg_loss_z0}, hair_loss_z0: {hair_loss_z0}")
-                
-                # print(pred_z0.max(), pred_z0.min(), pred_z0.mean(), pred_z0.std())
-                # print(latents.max(), latents.min(), latents.mean(), latents.std())
-    
                 
                 total_loss += loss.item()
                 
@@ -434,14 +499,11 @@ def train_img_to_embedding(processed_image_path, pt_file_path):
                 if global_step == max_train_steps-1:
                     print("saving embeddings...")
                     if accelerator.is_main_process:                    
-                        try:
-                            Embedding_Manager.save(test_vit_cls_output, pt_file_path, None)
-                        except:
-                            Embedding_Manager.module.save(test_vit_cls_output, pt_file_path, None)
-
-                        logger.info(f"Saved state to {pt_file_path}")
-                if global_step % 100 == 0 and global_step!=0:
-                    avg_loss = total_loss / (global_step - epoch*len(train_dataloader))
+                        Embedding_Manager.save(test_vit_cls_output, pt_file_path_1, 1)
+                        Embedding_Manager.save(test_vit_cls_output, pt_file_path_2, 2)
+                        logger.info(f"Saved state to {pt_file_path_1} and {pt_file_path_2}")
+                if (global_step+1) % 100 == 0:
+                    avg_loss = total_loss / (global_step + 1 - epoch*len(train_dataloader))
                     print(f"Average Loss: {avg_loss:.4f}")
                 global_step += 1
 
