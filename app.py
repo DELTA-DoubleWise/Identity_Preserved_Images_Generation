@@ -4,7 +4,7 @@ from prompt_processing import story_to_prompts, prompts_parse
 import re
 import os
 from app_model import get_model
-from util import abs_path
+from utils import abs_path
 
 class GradioApp:
     def __init__(self):
@@ -15,15 +15,29 @@ class GradioApp:
         self.pt_paths_2 = []
         self.name_list = []
         self.meta_data = {}
-        self.model_name = "stable-diffusion-xl"   # Could also be "stable-diffusion-2-1" "stable-diffusion-xl"
+        self.model_name = "stable-diffusion-xl"   # Could be "stable-diffusion-2-1" or "stable-diffusion-xl"
         self.model = get_model(self.model_name)
-        self.pretrained_images_dict = {
-            'Taylor Swift': ('pretrained_images/Taylor_Swift.png', 'pretrained_images/Taylor_Swift.pt'),
-            'Jane Smith': ('pretrained_images/Jane_Smith.png', 'pretrained_images/Jane_Smith.pt')
+        self.pretrained_images_dict_21 = {
+            'Taylor Swift': ('pretrained_images/img/Taylor_Swift.png', 'pretrained_images/face_embeddings/Taylor_Swift.pt', None),
+            'Austin Reiter': ('pretrained_images/img/Austin_Reiter.png', 'pretrained_images/face_embeddings/Austin_Reiter.pt', None),
+            'Xuezhen Wang': ('pretrained_images/img/Xuezhen_Wang.png', 'pretrained_images/face_embeddings/Xuezhen_Wang.pt', None)
+            # 'Jane Smith': ('pretrained_images/img/Jane_Smith.png', 'pretrained_images/face_embeddings/Jane_Smith.pt', None)
         }
+        self.pretrained_images_dict_XL = {
+            'Taylor Swift': ('pretrained_images/img/Taylor_Swift.png', 'pretrained_images/face_embeddings/Taylor_Swift_1.pt', 'pretrained_images/face_embeddings/Taylor_Swift_2.pt'),
+            'Austin Reiter': ('pretrained_images/img/Austin_Reiter.png', 'pretrained_images/face_embeddings/Austin_Reiter_1.pt', 'pretrained_images/face_embeddings/Austin_Reiter_2.pt'),
+            'Xuezhen Wang': ('pretrained_images/img/Xuezhen_Wang.png', 'pretrained_images/face_embeddings/Xuezhen_Wang_1.pt', 'pretrained_images/face_embeddings/Xuezhen_Wang_2.pt')
+            # 'Jane Smith': ('pretrained_images/img/Jane_Smith.png', 'pretrained_images/face_embeddings/Jane_Smith.pt', 'pretrained_images/face_embeddings/Jane_Smith.pt')
+        }
+        self.pretrained_images_dicts = {
+            "stable-diffusion-2-1": self.pretrained_images_dict_21,
+            "stable-diffusion-xl": self.pretrained_images_dict_XL
+        }
+        self.pretrained_images_dict = self.pretrained_images_dicts[self.model_name]
         self.pretrained_images = [
-            ["pretrained_images/Taylor_Swift.png", "Taylor Swift"],
-            ["pretrained_images/Jane_Smith.png", "Jane Smith"]
+            ["pretrained_images/img/Taylor_Swift.png", "Taylor Swift"],
+            ["pretrained_images/img/Austin_Reiter.png", "Austin Reiter"],
+            ["pretrained_images/img/Xuezhen_Wang.png", "Xuezhen Wang"]
         ]
         self.style_options = ["2d minimalistic", "4k", "8k", "cartoon", "chiaroscuro lighting technique", "cinematic",
                               "clipart style", "close-up", "comic style", "cyberpunk", "detailed", "digitally enhanced",
@@ -32,6 +46,12 @@ class GradioApp:
                               "oil painting", "photorealistic", "pixel-art", "psychedelic style", "smooth light",
                               "studio ghibli style", "surreal", "Van Gogh", "vaporwave style", "vector", "vivid colors",
                               "watercolor painting", "wide shot"]
+        self.model_options = ["stable-diffusion-2-1", "stable-diffusion-xl"]
+
+    def update_model(self, choice):
+        self.model_name = choice
+        self.model = get_model(self.model_name)
+        self.pretrained_images_dict = self.pretrained_images_dicts[self.model_name]
 
     def process_images(self, image_files, names):
         os.makedirs(self.image_output_dir, exist_ok=True)
@@ -69,9 +89,10 @@ class GradioApp:
 
     def add_pretrained_image(self, clicked_event):
         name = clicked_event[1]
-        pretrained_image_path, pretrained_pt_path = self.pretrained_images_dict[name]
+        pretrained_image_path, pretrained_pt_path_1, pretrained_pt_path_2  = self.pretrained_images_dict[name]
         self.display_images.append(pretrained_image_path)
-        self.pt_paths_1.append(pretrained_pt_path)  # Assuming .pt paths handling similar to images
+        self.pt_paths_1.append(pretrained_pt_path_1)  # Assuming .pt paths handling similar to images
+        self.pt_paths_2.append(pretrained_pt_path_2)
         self.name_list.append(name.strip())
         return [(img, name) for img, name in zip(self.display_images, self.name_list)], ", ".join(self.name_list)
 
@@ -79,6 +100,10 @@ class GradioApp:
         with gr.Blocks() as demo:
             with gr.Row():
                 with gr.Column():
+                    # Dropdown to choose model
+                    model_dropdown = gr.Dropdown(choices=self.model_options, label="Select Model", value=self.model_name)
+                    model_dropdown.change(self.update_model, inputs=model_dropdown, outputs=[])
+
                     image_input = gr.Gallery(label="Upload Images", type="image", show_label=False)
                     name_input = gr.Textbox(label="Enter Names")
                     upload_btn = gr.Button("Upload")

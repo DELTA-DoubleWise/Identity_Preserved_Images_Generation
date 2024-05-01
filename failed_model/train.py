@@ -3,14 +3,14 @@ from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from diffusers import DPMSolverMultistepScheduler
 from diffusers.optimization import get_scheduler
-from dataset import FaceDataset
-from model import IDPreservedGenerativeModel
+from failed_model.dataset import FaceDataset
+from failed_model.model import IDPreservedGenerativeModel
 from torch.optim import Adam
 from tqdm import tqdm
 from torch.cuda.amp import autocast, GradScaler
 from transformers import ViTImageProcessor, ViTModel
 from PIL import Image
-from util import add_noise_return_paras
+from failed_model.util import add_noise_return_paras
 import types
 import os
 

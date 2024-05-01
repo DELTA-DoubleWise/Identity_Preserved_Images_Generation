@@ -262,8 +262,3 @@ def weights_init_normal(m):
     if classname.find("Linear") != -1:  
         torch.nn.init.normal_(m.weight.data, 0.0, 0.02)
         torch.nn.init.constant_(m.bias.data, 0.0)
-
-def abs_path(rel_path):
-    dir_path = os.path.dirname(os.path.realpath(__file__))  # Get the directory of the script
-    abs_file_path = os.path.join(dir_path, rel_path)
-    return abs_file_path
