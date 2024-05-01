@@ -4,7 +4,7 @@ from torch import nn
 from torchvision.transforms import transforms
 from transformers import SegformerImageProcessor, SegformerForSemanticSegmentation, ViTImageProcessor, ViTModel
 from PIL import Image
-from util import get_mask_from_parsing, get_box_from_parsing_tensor, ImageMaskTransforms
+from failed_model.util import get_mask_from_parsing, get_box_from_parsing_tensor, ImageMaskTransforms
 import torch
 from torch.cuda.amp import autocast, GradScaler
 import torch.nn.functional as F

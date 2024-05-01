@@ -7,8 +7,8 @@ import torch.nn.functional as F
 import torch.nn.init as init
 from diffusers import StableDiffusionPipeline
 from huggingface_hub.utils import validate_hf_hub_args
-from model_utils import StyleVectorizer
-from util import get_rep_pos
+from failed_model.model_utils import StyleVectorizer
+from failed_model.util import get_rep_pos
 from typing import Any, Callable, Dict, List, Optional, Union
 import PIL.Image
 
