@@ -1,7 +1,7 @@
 import torch
 from diffusers import StableDiffusionPipeline, DPMSolverMultistepScheduler, DiffusionPipeline
 import os
-from util import abs_path
+from utils import abs_path
 
 # Base Class Definition
 class BasePipeline:
