@@ -100,12 +100,11 @@ def train_model(model, data_loader, preprocessed_image, save_path, device, num_e
             if global_step == max_train_steps:
                 avg_loss = total_loss / (max_train_steps-epoch*len(data_loader))
                 model.save(save_path)
-        model.save(f"test/00001_{epoch}.pt")
         avg_loss = total_loss / len(data_loader)
         print(f"Epoch [{epoch+1}/{num_epochs}], Average Loss: {avg_loss:.4f}")
         
         
-def train_image(img_path, pt_file_path):
+def train_img_to_embedding(img_path, pt_file_path):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"device: {device}")
     
@@ -127,11 +126,6 @@ def train_image(img_path, pt_file_path):
     train_model(model, data_loader, original_img_vit_cls_output, pt_file_path, device)
     
     
-if __name__ == "__main__":
-    ## test image
-    face_img_path = 'test/00001.png'  # replace it with real path 
-    pt_file_path = 'test/00001.pt'
-    train_image(face_img_path, pt_file_path)
     
 
 
