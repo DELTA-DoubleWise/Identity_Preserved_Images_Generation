@@ -75,7 +75,7 @@ class GradioApp:
         return [(img, name) for img, name in zip(self.display_images, self.name_list)], ", ".join(self.name_list)
 
     def process_text(self, input_text):
-        self.meta_data = {self.name_list[i]: {"signal_word": f"*v{2*i+1} *v{2*i+2}"} for i in range(len(self.name_list))}
+        self.meta_data = {self.name_list[i]: {"signal_word": f"v{2*i+1}* v{2*i+2}*"} for i in range(len(self.name_list))}
         processed_text = story_to_prompts(input_text, self.meta_data)
         return processed_text
 
