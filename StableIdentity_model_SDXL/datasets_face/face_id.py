@@ -109,7 +109,7 @@ class FaceIdDataset(Dataset):
                  image_size: int = 512,
                  vit_path: str = None,
                  flip_p: float = 0.5,
-                 face_parsing_model: str = "StableIdentity_model/models/face_parsing/res/cp/79999_iter.pth",
+                 face_parsing_model: str = "StableIdentity_model_SDXL/models/face_parsing/res/cp/79999_iter.pth",
                  **kwargs,
                  ):
         """ """

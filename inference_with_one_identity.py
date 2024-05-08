@@ -25,7 +25,7 @@ def load_model(model_type):
     pipe = pipe.to(device)
     return pipe
 
-def run_inference(pipe, prompt, model_name, emb_path_1, emb_path_2=None):
+def run_inference(pipe, prompt, model_name, emb_path_1, emb_path_2=None, output = "./output.png"):
     tokens = ["v1*", "v2*"]
 
     embeddings = torch.load(emb_path_1).cuda()
@@ -51,17 +51,17 @@ def run_inference(pipe, prompt, model_name, emb_path_1, emb_path_2=None):
     
 
     image = pipe(prompt, guidance_scale=8.5).images[0]
-    image.save("output.png")
-    print("Inference completed and image saved as output.png")
+    image.save(output)
+    print(f"Inference completed and image saved as {output}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run inference with Stable Diffusion models.")
     parser.add_argument("--model_type", type=str, required=True, choices=["SD2.1", "SDXL"], help="Model type: 'SD2.1' or 'SDXL'")
     parser.add_argument("--emb_path_1", type=str, required=True, help="Path to the first embedding file")
     parser.add_argument("--emb_path_2", type=str, default=None, help="Path to the second embedding file (optional)")
-
+    parser.add_argument("--output_path", type=str, default="./output.png", help="Path to the output file")
     parser.add_argument("--prompt", type=str, required=True, help="Prompt for generating the image")
     args = parser.parse_args()
 
     pipe = load_model(args.model_type)
-    run_inference(pipe, args.prompt, args.model_type, args.emb_path_1, args.emb_path_2)
+    run_inference(pipe, args.prompt, args.model_type, args.emb_path_1, args.emb_path_2, args.output_path)
